@@ -1,0 +1,1 @@
+ft_spacy/**/vocab/vectors filter=lfs diff=lfs merge=lfs -text
