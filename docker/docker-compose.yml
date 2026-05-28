@@ -1,0 +1,145 @@
+# Запуск из корня проекта:
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
+# Из папки docker:
+#   docker compose up --build -d
+
+services:
+
+  # ── PostgreSQL — БД для LiteLLM UI ───────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pii_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=litellm
+      - POSTGRES_USER=litellm
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [pii_net]
+
+  # ── Ollama — локальный LLM-сервер ────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pii_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      # ollama/ollama:latest не содержит curl — используем сам CLI
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks: [pii_net]
+
+  # ── Init-контейнер: скачивает llama3.2 один раз ──────────────────────────
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: pii_ollama_init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: >
+      sh -c "ollama pull llama3.2 && echo '>>> llama3.2 готова <<<'"
+    restart: "no"
+    networks: [pii_net]
+
+  # ── PII Service — детектор персональных данных ───────────────────────────
+  pii-service:
+    build:
+      context: ..                               # корень проекта (нужны pii_detector/ и ft_spacy/)
+      dockerfile: docker/pii_service/Dockerfile
+    container_name: pii_service
+    restart: unless-stopped
+    environment:
+      - PII_SPACY_MODEL_PATH=/app/model-best-combo-0.78
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks: [pii_net]
+
+  # ── LiteLLM — прокси с PII-guardrail ─────────────────────────────────────
+  litellm:
+    build:
+      context: ..
+      dockerfile: docker/litellm/Dockerfile
+    container_name: pii_litellm
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pii-service:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm/config.yaml:/app/litellm_config.yaml:ro
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - UI_USERNAME=${UI_USERNAME:-admin}
+      - UI_PASSWORD=${UI_PASSWORD:-${LITELLM_MASTER_KEY}}
+      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      - PII_SERVICE_URL=http://pii-service:5001
+      - PYTHONPATH=/app
+    command: >
+      --config /app/litellm_config.yaml
+      --port 4000
+      --host 0.0.0.0
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks: [pii_net]
+
+  # ── Open WebUI — браузерный интерфейс ────────────────────────────────────
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: pii_openwebui
+    restart: unless-stopped
+    depends_on:
+      litellm:
+        condition: service_healthy
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://litellm:4000/v1
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY}
+      - ENABLE_OLLAMA_API=false
+      - WEBUI_AUTH=false
+    volumes:
+      - openwebui_data:/app/backend/data
+    networks: [pii_net]
+
+# ── Тома ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  ollama_data:
+  openwebui_data:
+
+# ── Сеть ──────────────────────────────────────────────────────────────────
+networks:
+  pii_net:
+    driver: bridge

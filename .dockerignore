@@ -1,0 +1,46 @@
+# Git и IDE
+.git/
+.gitattributes
+.idea/
+.claude/
+
+# Секреты
+.env
+
+# Неиспользуемые модели
+ft_spacy/model-best-2ds-0.52/
+ft_spacy/model-best-synth-0.63/
+ft_spacy/make_combo.py
+ft_spacy/convert_synth.ipynb
+
+# Обучающие данные и датасеты
+data_spacy/
+data_gen/
+detected_datasets/
+Detailed-NER-Dataset-RU/
+
+# Эксперименты и исследовательские файлы
+experiments/
+old_files/
+
+# Ноутбуки и медиафайлы
+*.ipynb
+*.png
+*.jpg
+*.csv
+
+# Python кэш
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Виртуальные окружения
+venv/
+.venv/
+env/
+
+# Что нужно:
+# pii_detector/                    → нужен pii-service
+# ft_spacy/model-best-combo-0.78/  → нужен pii-service (638 МБ, кешируется)
+# docker/                          → нужен обоим
