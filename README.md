@@ -27,7 +27,7 @@
 
 **spaCy NER** — дообученная модель `ru_core_news_lg` с NER-головой на два класса. 
 Покрывает `NAME` и `ADDRESS`, так как их вариативность делает регулярки неприменимыми. 
-Подробности дообучения и сравнение трёх конфигураций — в [`finetune_spacy.md`](finetune_spacy.md).
+Подробности дообучения и сравнение трёх конфигураций — в [`docs/finetune_spacy.md`](docs/finetune_spacy.md).
 
 **Regex + контрольные суммы** — каждый паттерн (где применимо) работает совместно с математической валидацией 
 (алгоритм Луна для карт, контрольные суммы ФНС для ИНН/ОГРН/СНИЛС) и контекстным окном ±60 символов. 
@@ -144,7 +144,9 @@ print(detector.anonymize("Email: test@example.com, СНИЛС 112-233-445 95"))
 
 ## Метрики
 
-Оценка на [`hivetrace/pii-bench`](https://huggingface.co/datasets/hivetrace/pii-bench) (entity + domain subset), exact-match и char-level. Подробнее о выборе подхода и сравнении с другими моделями — в [`experiments.md`](experiments.md).
+Оценка на [`hivetrace/pii-bench`](https://huggingface.co/datasets/hivetrace/pii-bench) 
+(entity + domain subset), exact-match и char-level. 
+Подробнее о выборе подхода и сравнении с другими моделями — в [`docs/experiments.md`](docs/experiments.md).
 
 ### Exact-match
 
@@ -198,4 +200,7 @@ print(detector.anonymize("Email: test@example.com, СНИЛС 112-233-445 95"))
 
 ## Синтетический датасет
 
-Для дообучения NER не существует публичного русскоязычного датасета с классами NAME и ADDRESS в сервисном тексте. Датасет (~3 000 примеров, 13 доменов) был сгенерирован с помощью Claude через итеративный loop: скрипт `data_gen/sample_next.py` сэмплирует спецификацию примера, Claude генерирует текст по инструкции. Подробнее — в [`synth_generation.md`](synth_generation.md).
+Для дообучения NER не существует публичного русскоязычного датасета с классами NAME и ADDRESS в сервисном тексте. 
+Датасет (~3 000 примеров, 13 доменов) был сгенерирован с помощью Claude через итеративный loop: 
+скрипт `training/data_gen/sample_next.py` сэмплирует спецификацию примера, Claude генерирует текст по инструкции. 
+Подробнее — в [`docs/synth_generation.md`](docs/synth_generation.md).
