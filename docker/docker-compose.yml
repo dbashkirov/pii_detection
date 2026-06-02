@@ -42,7 +42,7 @@ services:
       start_period: 20s
     networks: [pii_net]
 
-  # ── Init-контейнер: скачивает llama3.2 один раз ──────────────────────────
+  # ── Init-контейнер: скачивает gemma3:4b один раз ─────────────────────────
   ollama-init:
     image: ollama/ollama:latest
     container_name: pii_ollama_init
@@ -54,7 +54,7 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
     entrypoint: >
-      sh -c "ollama pull llama3.2 && echo '>>> llama3.2 готова <<<'"
+      sh -c "ollama pull gemma3:4b && echo '>>> gemma3:4b готова <<<'"
     restart: "no"
     networks: [pii_net]
 
@@ -77,11 +77,9 @@ services:
       start_period: 90s
     networks: [pii_net]
 
-  # ── LiteLLM — прокси с PII-guardrail ─────────────────────────────────────
+  # ── LiteLLM — прокси с нативным Presidio PII-guardrail ──────────────────
   litellm:
-    build:
-      context: ..
-      dockerfile: docker/litellm/Dockerfile
+    image: ghcr.io/berriai/litellm:main-stable
     container_name: pii_litellm
     restart: unless-stopped
     depends_on:
@@ -94,14 +92,12 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./litellm/config.yaml:/app/litellm_config.yaml:ro
+      - ./litellm_config.yaml:/app/litellm_config.yaml:ro
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - UI_USERNAME=${UI_USERNAME:-admin}
       - UI_PASSWORD=${UI_PASSWORD:-${LITELLM_MASTER_KEY}}
       - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
-      - PII_SERVICE_URL=http://pii-service:5001
-      - PYTHONPATH=/app
     command: >
       --config /app/litellm_config.yaml
       --port 4000

@@ -1,82 +1,78 @@
-# PII Detector — локальный стенд с LLM и фильтрацией персональных данных
+# Тестовый стенд с LLM и фильтрацией персональных данных
 
-Изолированная инфраструктура для тестирования политик обработки персональных данных в диалоге с языковой моделью. Все компоненты работают локально — ни запросы, ни данные не покидают машину.
+Локальный стек для тестирования политик обработки ПД в диалоге с языковой моделью. Все компоненты работают на машине — запросы и данные не покидают окружение.
 
-## Как это устроено
+## Архитектура
 
 ```
 [Open WebUI  :3000]  ──►  [LiteLLM  :4000]  ──►  [Ollama  :11434]
                                   │
-                           [PII Guardrail]
-                                  │ HTTP
+                    [нативный Presidio guardrail]
+                    (встроен в LiteLLM, без кастомного кода)
+                                  │ HTTP  (Presidio REST API)
                           [pii-service  :5001]
                           HybridPIIDetector
                           (Presidio + spaCy NER)
 ```
 
-Пользователь общается с моделью через браузерный интерфейс Open WebUI. Все сообщения проходят через LiteLLM-прокси, где к ним применяется guardrail: запрос уходит в `pii-service`, который на базе Presidio и дообученной spaCy-модели находит персональные данные. Дальнейшее поведение зависит от выбранной политики.
+| Сервис          | Роль                                                                 |
+|-----------------|----------------------------------------------------------------------|
+| **Open WebUI**  | Браузерный чат-интерфейс                                             |
+| **LiteLLM**     | OpenAI-совместимый прокси с нативным Presidio PII-guardrail          |
+| **pii-service** | FastAPI-обёртка над `HybridPIIDetector`, реализует Presidio REST API |
+| **Ollama**      | Локальный LLM-сервер (`gemma3:4b`)                                   |
+| **PostgreSQL**  | База данных LiteLLM UI — логи запросов, управление ключами           |
 
-### Сервисы
+### Политика фильтрации
 
-| Сервис | Роль |
-|---|---|
-| **Open WebUI** | Браузерный чат-интерфейс |
-| **LiteLLM** | OpenAI-совместимый прокси с PII-guardrail |
-| **pii-service** | FastAPI-обёртка над `HybridPIIDetector`; детекция и маскировка ПД |
-| **Ollama** | Локальный LLM-сервер (`llama3.2`) |
-| **PostgreSQL** | База данных для LiteLLM UI (логи, ключи) |
+Задаётся в `docker/litellm_config.yaml` до запуска. Одна модель `gemma3:4b`, guardrail всегда активен.
 
-### Политики фильтрации
+| Значение  | Поведение                                                                                                                                                                                                   |
+|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `"MASK"`  | ПД заменяются нумерованными плейсхолдерами до отправки в LLM: `Иван Петров` → `<NAME_1>`. LLM отвечает с плейсхолдерами, LiteLLM подставляет исходные значения обратно перед возвратом ответа пользователю. |
+| `"BLOCK"` | Запросы с ПД отклоняются (HTTP 400).                                                                                                                                                                        |
 
-Политика выбирается через выпадающий список моделей в Open WebUI:
+Каждый тип сущности настраивается независимо в `pii_entities_config`. Чтобы переключить все в режим блокировки — заменить все `"MASK"` на `"BLOCK"` в `config.yaml` и выполнить `docker compose restart litellm` (пересборка не нужна — файл смонтирован томом).
 
-| Модель | Политика |
-|---|---|
-| `llama3.2` | Без фильтрации — сообщения передаются как есть |
-| `llama3.2-mask` | ПД заменяются на типизированные теги: `Иван Петров` → `<NAME>` |
-| `llama3.2-block` | Запросы с ПД отклоняются (HTTP 400) |
-
-Обнаруживаемые типы сущностей: `NAME`, `ADDRESS`, `PHONE_NUMBER`, `EMAIL_ADDRESS`, `INN`, `SNILS`, `OGRN`, `OGRNIP`, `KPP`, `PASSPORT_NUMBER`, `BANK_CARD_NUMBER`, `CVC`, `TOKEN`.
+Обнаруживаемые типы: `NAME`, `ADDRESS`, `PHONE_NUMBER`, `EMAIL`, `INN`, `SNILS`, `OGRN`, `OGRNIP`, `KPP`, `PASSPORT_NUMBER`, `BANK_CARD_NUMBER`, `CVC`, `TOKEN`.
 
 ---
 
 ## Требования
 
 - Docker Desktop с Compose V2
-- ~12 ГБ свободного места (образы ≈ 4 ГБ · llama3.2 ≈ 2 ГБ · spaCy-модель ≈ 638 МБ)
+- ~13 ГБ свободного места (образы ≈ 4 ГБ · gemma3:4b ≈ 3.3 ГБ · spaCy-модель ≈ 638 МБ)
 - RAM: минимум 8 ГБ, рекомендуется 16 ГБ
 
 ---
 
 ## Запуск
 
-### 1. Конфигурация секретов
-
-Рабочий конфигурационный файл создаётся на основе шаблона:
+### 1. Настройка секретов
 
 ```bash
 cp .env.example .env
 ```
 
-В `.env` нужно заполнить три значения:
+Отредактировать `.env`:
 
 ```env
-# Мастер-ключ LiteLLM — обязательно с префиксом sk-
+# Должен начинаться с "sk-"
 # Сгенерировать: echo "sk-$(openssl rand -hex 32)"
 LITELLM_MASTER_KEY=sk-...
 
-# Учётные данные для входа в LiteLLM UI
 UI_USERNAME=admin
 UI_PASSWORD=...
 
-# Пароль PostgreSQL (используется только внутри сети Docker)
 # Сгенерировать: openssl rand -hex 16
 POSTGRES_PASSWORD=...
 ```
 
-> **Важно:** `LITELLM_MASTER_KEY` должен начинаться с `sk-` — без этого префикса LiteLLM отвергает ключ и авторизация не работает.
+### 2. Настройка политики фильтрации
 
-### 2. Запуск стека
+Открыть `docker/litellm_config.yaml` и выставить нужные значения в `pii_entities_config` (`"MASK"` или `"BLOCK"`). По умолчанию всё в режиме `"MASK"`.
+
+### 3. Запуск стека
 
 Из папки `docker/`:
 
@@ -90,31 +86,29 @@ docker compose up --build -d
 docker compose -f docker/docker-compose.yml --env-file docker/.env up --build -d
 ```
 
-Первая сборка занимает 10–20 минут: установка зависимостей, копирование spaCy-модели (638 МБ), загрузка llama3.2 (~2 ГБ, однократно).
+Первая сборка занимает 10–20 минут: установка зависимостей, копирование spaCy-модели (638 МБ), загрузка gemma3:4b (~3.3 ГБ, однократно).
 
-### 3. Проверка готовности
+### 4. Проверка готовности
 
 ```bash
-# Детектор готов, когда в логах появляется "HybridPIIDetector готов ✓"
+# Детектор готов, когда появляется "HybridPIIDetector готов ✓"
 docker logs -f pii_service
 
-# Модель llama3.2 загружена, когда появляется ">>> llama3.2 готова <<<"
+# Модель загружена, когда появляется ">>> gemma3:4b готова <<<"  (только первый запуск)
 docker logs -f pii_ollama_init
 ```
-
-После этого все сервисы операционны.
 
 ---
 
 ## Интерфейсы
 
-| Сервис | Адрес | Описание |
-|---|---|---|
-| **Open WebUI** | http://localhost:3000 | Основной чат-интерфейс |
-| **LiteLLM UI** | http://localhost:4000/ui | Дашборд прокси — логи запросов, управление ключами |
-| **LiteLLM API** | http://localhost:4000 | OpenAI-совместимый REST API |
-| **pii-service** | http://localhost:5001/docs | Swagger UI — интерактивные `/analyze` и `/anonymize` |
-| **Ollama** | http://localhost:11434/api/tags | REST API Ollama — список установленных моделей |
+| Сервис          | Адрес                           | Описание                                             |
+|-----------------|---------------------------------|------------------------------------------------------|
+| **Open WebUI**  | http://localhost:3000           | Основной чат-интерфейс                               |
+| **LiteLLM UI**  | http://localhost:4000/ui        | Дашборд прокси — логи запросов, управление ключами   |
+| **LiteLLM API** | http://localhost:4000           | OpenAI-совместимый REST API                          |
+| **pii-service** | http://localhost:5001/docs      | Swagger UI — интерактивные `/analyze` и `/anonymize` |
+| **Ollama**      | http://localhost:11434/api/tags | REST API Ollama — список установленных моделей       |
 
 ---
 
@@ -140,7 +134,7 @@ curl -s -X POST http://localhost:5001/analyze \
   -d '{"text": "Меня зовут Иван Петров, ИНН 500100732259, тел. +7 916 123 45 67"}' \
   | python3 -m json.tool
 
-# Маскировка
+# Анонимизация — возвращает text + items (формат Presidio)
 curl -s -X POST http://localhost:5001/anonymize \
   -H "Content-Type: application/json" \
   -d '{"text": "Email: test@example.com, СНИЛС 112-233-445 95"}' \
@@ -156,27 +150,27 @@ KEY=<значение LITELLM_MASTER_KEY из .env>
 curl -s -H "Authorization: Bearer $KEY" \
   http://localhost:4000/v1/models | python3 -m json.tool
 
-# Политика mask — LLM получит <NAME> и <PHONE_NUMBER> вместо реальных данных
+# Режим MASK — LLM видит <NAME_1>, пользователь получает исходное имя (deanonymization)
 curl -s -X POST http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "llama3.2-mask",
+    "model": "gemma3:4b",
     "messages": [{"role": "user", "content": "Меня зовут Иван Петров, мой телефон +7 916 123 45 67"}]
   }' | python3 -m json.tool
 
-# Политика block — ожидаемый ответ HTTP 400
+# Режим BLOCK — ожидаемый ответ HTTP 400
 curl -s -o /dev/null -w "%{http_code}\n" \
   -X POST http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "llama3.2-block",
+    "model": "gemma3:4b",
     "messages": [{"role": "user", "content": "Мой email: test@example.com"}]
   }'
 
-# Лог guardrail
-docker logs pii_litellm | grep PIIGuardrail
+# Активность guardrail в логах
+docker logs pii_litellm | grep -i presidio
 ```
 
 ---
@@ -184,23 +178,22 @@ docker logs pii_litellm | grep PIIGuardrail
 ## Управление стеком
 
 ```bash
-# Остановить без удаления контейнеров и данных
-docker compose stop
-
-# Поднять остановленный стек без пересборки
-docker compose start
-
-# Остановить и удалить контейнеры (тома с данными сохраняются)
+# Остановить без удаления данных
 docker compose down
 
-# Полный сброс включая тома (модели Ollama, история чата, БД)
+# Остановить и удалить все тома (модели Ollama, история чата, БД)
 docker compose down -v
+
+# Сменить политику фильтрации (без пересборки)
+# 1. Изменить значения в docker/litellm_config.yaml
+# 2. Перезапустить только litellm:
+docker compose restart litellm
+
+# Обновить LiteLLM до последней версии
+docker compose pull litellm && docker compose up -d litellm
 
 # Пересобрать pii-service после изменений в pii_detector/
 docker compose up --build -d pii-service
-
-# Пересобрать litellm после изменений в pii_guardrail.py
-docker compose up --build -d litellm
 
 # Мониторинг ресурсов
 docker stats pii_service pii_litellm pii_ollama pii_openwebui

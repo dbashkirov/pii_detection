@@ -1,0 +1,70 @@
+model_list:
+  - model_name: "gemma3:4b"
+    litellm_params:
+      model: "ollama_chat/gemma3:4b"
+      api_base: http://ollama:11434
+
+guardrails:
+  - guardrail_name: "pii-filter"
+    litellm_params:
+      guardrail: presidio
+      mode: "pre_call"
+      default_on: true
+
+      # Адреса Presidio REST API — наш pii-service реализует этот интерфейс
+      presidio_analyzer_api_base: "http://pii-service:5001"
+      presidio_anonymizer_api_base: "http://pii-service:5001"
+
+      presidio_language: "en"
+
+      # Применять только к входящим запросам (не к ответам LLM).
+      # Без этого LiteLLM создаёт дополнительный post_call callback apply_to_output,
+      # который перемаскирует ответ после deanonymization и ломает обратную подстановку.
+      presidio_filter_scope: "input"
+
+      # ── Политика фильтрации ───────────────────────────────────────────────
+      # Задаётся один раз до запуска. Допустимые значения для каждой сущности:
+      #   "MASK" — ПД заменяются на <ENTITY_TYPE> до отправки в LLM;
+      #              LLM видит <NAME_1>, пользователь получает исходное имя обратно
+      #   "BLOCK" — запрос отклоняется (HTTP 400) при обнаружении ПД.
+      #
+      #   Чтобы сменить режим: изменить значения ниже, затем
+      #   docker compose restart litellm (пересборка не нужна)
+      pii_entities_config:
+        NAME: "MASK"
+        ADDRESS: "MASK"
+        EMAIL: "MASK"
+        PHONE_NUMBER: "MASK"
+        BANK_CARD_NUMBER: "MASK"
+        CVC: "MASK"
+        TOKEN: "MASK"
+        INN: "MASK"
+        KPP: "MASK"
+        OGRN: "MASK"
+        OGRNIP: "MASK"
+        SNILS: "MASK"
+        PASSPORT_NUMBER: "MASK"
+
+#        NAME: "BLOCK"
+#        ADDRESS: "BLOCK"
+#        EMAIL: "BLOCK"
+#        PHONE_NUMBER: "BLOCK"
+#        BANK_CARD_NUMBER: "BLOCK"
+#        CVC: "BLOCK"
+#        TOKEN: "BLOCK"
+#        INN: "BLOCK"
+#        KPP: "BLOCK"
+#        OGRN: "BLOCK"
+#        OGRNIP: "BLOCK"
+#        SNILS: "BLOCK"
+#        PASSPORT_NUMBER: "BLOCK"
+
+
+      # Обратная подстановка: LLM отвечает с <NAME_1>, пользователь видит исходное имя
+      output_parse_pii: true
+
+litellm_settings:
+  request_timeout: 60
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"

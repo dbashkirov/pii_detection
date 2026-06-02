@@ -175,3 +175,18 @@ class HybridPIIDetector:
             return text
         anonymized = self._anonymizer.anonymize(text=text, analyzer_results=results)
         return anonymized.text or ''
+
+    def anonymize_with_items(self, text: str, language: str = "en"):
+        """Return (anonymized_text, items) where items is the Presidio OperatorResult list.
+
+        items[i] is a dict with keys: start, end, entity_type, text (placeholder), operator.
+        Positions in items refer to the anonymized text, not the original.
+        Useful for demonstrating deanonymization: the original spans can be recovered from
+        analyze() results paired with these items.
+        """
+        results = self.analyze(text, language)
+        if not results:
+            return text, []
+        engine_result = self._anonymizer.anonymize(text=text, analyzer_results=results)
+        items = [vars(item) for item in (engine_result.items or [])]
+        return engine_result.text or '', items
