@@ -1,5 +1,5 @@
 # Path to the trained spaCy NER model (passed directly to spacy.load()).
-SPACY_NER_MODEL = "./ft_spacy/model-best-combo-0.78"
+SPACY_NER_MODEL = "./training/models/model-best-combo-0.78"
 
 # Confidence score assigned by SpacyRecognizer to all detected entities
 SPACY_NER_STRENGTH = 0.85

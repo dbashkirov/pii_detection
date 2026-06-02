@@ -101,7 +101,7 @@ for r in records:
     for e in r["entities"]:
         assert e["text"] in r["text"], f"FAIL {r['id']}: '{e['text']}' not in text"
 
-with open("data_gen/output/synthetic_pii.jsonl", "a", encoding="utf-8") as f:
+with open("output/synthetic_pii.jsonl", "a", encoding="utf-8") as f:
     for r in records:
         f.write(json.dumps(r, ensure_ascii=False) + "\n")
 

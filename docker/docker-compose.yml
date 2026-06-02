@@ -61,7 +61,7 @@ services:
   # ── PII Service — детектор персональных данных ───────────────────────────
   pii-service:
     build:
-      context: ..                               # корень проекта (нужны pii_detector/ и ft_spacy/)
+      context: ..                               # корень проекта (нужны pii_detector/ и training/models/)
       dockerfile: docker/pii_service/Dockerfile
     container_name: pii_service
     restart: unless-stopped

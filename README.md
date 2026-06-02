@@ -48,7 +48,7 @@
 ## Структура репозитория
 
 ```
-├── pii_detector/              # Основной модуль
+├── pii_detector/              # Python-пакет детектора
 │   ├── engine.py              # HybridPIIDetector
 │   ├── config.py              # Пути к модели, список типов
 │   ├── validators.py          # Контрольные суммы (ИНН, СНИЛС, ОГРН, Луна)
@@ -56,36 +56,40 @@
 │       ├── detectors.py       # 10 regex/pattern recognizers
 │       └── token.py           # TokenRecognizer
 │
-├── ft_spacy/                  # Дообучение spaCy
-│   ├── model-best-combo-0.78/ # Лучшая модель (входит в репо)
-│   ├── prepare_spacy.ipynb    # Подготовка внешних датасетов
-│   ├── convert_synth.ipynb    # Конвертация синтетики в spaCy-формат
-│   ├── train_spacy_dev.ipynb  # Обучение
-│   └── make_combo.py          # Слияние датасетов
-│
-├── data_gen/                  # Генерация синтетического датасета
-│   ├── sample_next.py         # Генератор спецификаций
-│   ├── generation_prompt.md   # Промпт для Claude
-│   └── output/
-│       └── synthetic_pii.jsonl
+├── training/                  # Пайплайн обучения NER-модели
+│   ├── models/
+│   │   └── model-best-combo-0.78/  # Обученная spaCy-модель (входит в репо)
+│   ├── data/                  # spaCy-датасеты (train/dev splits)
+│   ├── data_gen/              # Генерация синтетических данных
+│   │   ├── sample_next.py
+│   │   ├── generation_prompt.md
+│   │   └── output/synthetic_pii.jsonl
+│   └── notebooks/             # Ноутбуки обучения
+│       ├── prepare_spacy.ipynb
+│       ├── convert_synth.ipynb
+│       ├── train_spacy.ipynb
+│       └── make_combo.py
 │
 ├── docker/                    # Локальный демо-стенд
 │   ├── pii_service/           # FastAPI-обёртка над детектором
 │   │   ├── main.py            # Эндпоинты /analyze и /anonymize
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
-│   ├── litellm/               # LiteLLM-прокси с PII-guardrail
-│   │   ├── pii_guardrail.py   # Логика политик mask / block
-│   │   ├── config.yaml        # Конфигурация моделей и guardrail
-│   │   └── Dockerfile
 │   ├── docker-compose.yml
+│   ├── litellm_config.yaml    # Конфигурация LiteLLM и guardrail
 │   ├── .env.example
 │   └── README.md
 │
-├── demo.ipynb                 # Интерактивные примеры
-├── experiments.md             # Сравнение моделей на pii-bench
-├── finetune_spacy.md          # Детали дообучения NER
-└── synth_generation.md        # Генерация синтетических данных
+├── docs/                      # Документация
+│   ├── experiments.md         # Сравнение моделей на pii-bench
+│   ├── finetune_spacy.md      # Детали дообучения NER
+│   ├── synth_generation.md    # Генерация синтетических данных
+│   └── images/
+│
+├── notebooks/                 # Демо и примеры использования
+│   └── demo.ipynb
+│
+└── README.md
 ```
 
 ---
@@ -103,7 +107,7 @@ pip install presidio-analyzer presidio-anonymizer spacy phonenumbers pymorphy3
 ```python
 from pii_detector import HybridPIIDetector
 
-detector = HybridPIIDetector(spacy_model_path="ft_spacy/model-best-combo-0.78")
+detector = HybridPIIDetector(spacy_model_path="training/models/model-best-combo-0.78")
 
 # Детекция
 text = "Иван Петров, ИНН 500100732259, тел. +7 916 123 45 67"
@@ -119,7 +123,7 @@ print(detector.anonymize("Email: test@example.com, СНИЛС 112-233-445 95"))
 # Email: <EMAIL>, СНИЛС <SNILS>
 ```
 
-Интерактивные примеры на разных доменах — в [`demo.ipynb`](demo.ipynb).
+Примеры использования для детекции / маскирования ПД в текстах — в [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
 
 ---
 

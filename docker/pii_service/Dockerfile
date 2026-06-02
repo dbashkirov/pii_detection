@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY pii_detector/ /app/pii_detector/
 
 # ── Обученная модель (тяжёлый слой, меняется редко → кешируется) ───
-COPY ft_spacy/model-best-combo-0.78/ /app/model-best-combo-0.78/
+COPY training/models/model-best-combo-0.78/ /app/model-best-combo-0.78/
 
 # ── FastAPI приложение ───────────────────────────────────────────────────────
 COPY docker/pii_service/main.py /app/main.py

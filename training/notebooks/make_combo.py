@@ -1,6 +1,6 @@
 """Объединяет пары .spacy файлов в combo-версии:
-    data_spacy/dev.spacy   + data_spacy/dev_synth.spacy   → data_spacy/dev_combo.spacy
-    data_spacy/train.spacy + data_spacy/train_synth.spacy → data_spacy/train_combo.spacy
+    training/data/dev.spacy   + training/data/dev_synth.spacy   → training/data/dev_combo.spacy
+    training/data/train.spacy + training/data/train_synth.spacy → training/data/train_combo.spacy
 """
 import spacy
 from spacy.tokens import DocBin
@@ -20,7 +20,7 @@ def merge(paths_in: list, path_out: Path, vocab) -> None:
 
 
 nlp = spacy.blank("ru")
-DATA = Path(__file__).parent.parent / "data_spacy"
+DATA = Path(__file__).parent.parent / "data"
 
 print("=== dev_combo ===")
 merge(

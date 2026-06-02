@@ -7,23 +7,14 @@
 # Секреты
 .env
 
-# Неиспользуемые модели
-ft_spacy/model-best-2ds-0.52/
-ft_spacy/model-best-synth-0.63/
-ft_spacy/make_combo.py
-ft_spacy/convert_synth.ipynb
+# Обучающие данные и ноутбуки — не нужны в образе
+training/data/
+training/data_gen/
+training/notebooks/
 
-# Обучающие данные и датасеты
-data_spacy/
-data_gen/
-detected_datasets/
-Detailed-NER-Dataset-RU/
-
-# Эксперименты и исследовательские файлы
-experiments/
-old_files/
-
-# Ноутбуки и медиафайлы
+# Документация и медиа
+docs/
+notebooks/
 *.ipynb
 *.png
 *.jpg
@@ -40,7 +31,7 @@ venv/
 .venv/
 env/
 
-# Что нужно:
-# pii_detector/                    → нужен pii-service
-# ft_spacy/model-best-combo-0.78/  → нужен pii-service (638 МБ, кешируется)
-# docker/                          → нужен обоим
+# Что попадает в образ pii-service:
+# pii_detector/                          → код детектора
+# training/models/model-best-combo-0.78/ → spaCy-модель (638 МБ, кешируется)
+# docker/                                → Dockerfile и main.py

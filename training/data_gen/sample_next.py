@@ -3,11 +3,11 @@
 sample_next.py — случайная спецификация следующего примера для PII-датасета.
 
 Использование:
-    python data_gen/sample_next.py            # случайная спека
-    python data_gen/sample_next.py 42         # фиксированный seed
-    python data_gen/sample_next.py --stats    # целевые вероятности
+    python training/data_gen/sample_next.py            # случайный спек
+    python training/data_gen/sample_next.py 42         # фиксированный seed
+    python training/data_gen/sample_next.py --stats    # целевые вероятности
 
-Вывод: JSON в stdout. Claude читает его и генерирует один пример по спеке.
+Вывод: JSON в stdout. Claude читает его и генерирует один пример по спеку.
 """
 
 import random
