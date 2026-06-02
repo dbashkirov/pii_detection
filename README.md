@@ -94,7 +94,22 @@
 
 ---
 
-## Быстрый старт
+## Демо-стенд
+
+Локальный LLM-стек с PII-фильтрацией в диалоге: Open WebUI → LiteLLM (нативный Presidio guardrail) → Ollama. Все запросы остаются на машине. Политика — `MASK` (ПД заменяются плейсхолдерами до LLM, обратно подставляются исходные) или `BLOCK` (HTTP 400).
+
+```bash
+cp docker/.env.example docker/.env  # заполнить секреты по примеру
+docker compose -f docker/docker-compose.yml --env-file docker/.env up --build -d
+```
+
+После запуска: Open WebUI — http://localhost:3000, LiteLLM UI — http://localhost:4000/ui
+
+Подробнее — в [`docker/README.md`](docker/README.md).
+
+---
+
+## Использование
 
 ### Установка
 
@@ -102,7 +117,7 @@
 pip install presidio-analyzer presidio-anonymizer spacy phonenumbers pymorphy3
 ```
 
-### Использование
+### Детекция и маскирование
 
 ```python
 from pii_detector import HybridPIIDetector
@@ -123,31 +138,7 @@ print(detector.anonymize("Email: test@example.com, СНИЛС 112-233-445 95"))
 # Email: <EMAIL>, СНИЛС <SNILS>
 ```
 
-Примеры использования для детекции / маскирования ПД в текстах — в [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
-
----
-
-## Демо-стенд
-
-Полный локальный стек для тестирования детекции в диалоге с LLM:
-
-```
-[Open WebUI :3000]  ──►  [LiteLLM :4000]  ──►  [Ollama :11434]
-                                │
-                  [native Presidio guardrail]
-                                │ HTTP  (Presidio REST API)
-                        [pii-service :5001]
-                         HybridPIIDetector
-```
-
-Политика фильтрации задаётся в `docker/litellm/config.yaml` до запуска:
-
-| Значение  | Поведение                                                                                                        |
-|-----------|------------------------------------------------------------------------------------------------------------------|
-| `"MASK"`  | ПД заменяются плейсхолдерами до отправки в LLM; LLM видит `<NAME_1>`, пользователь получает исходное имя обратно |
-| `"BLOCK"` | Запросы с ПД отклоняются (HTTP 400)                                                                              |
-
-Инструкция по запуску — в [`docker/README.md`](docker/README.md).
+Больше примеров — в [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
 
 ---
 
