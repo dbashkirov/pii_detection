@@ -1,8 +1,3 @@
-# Запуск из корня проекта:
-#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
-# Из папки docker:
-#   docker compose up --build -d
-
 services:
 
   # ── PostgreSQL — БД для LiteLLM UI ───────────────────────────────────────
@@ -54,7 +49,7 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
     entrypoint: >
-      sh -c "ollama pull gemma3:4b && echo '>>> gemma3:4b готова <<<'"
+      sh -c "ollama pull gemma3:4b && ollama pull gemma3:1b && echo '>>> модели готовы <<<'"
     restart: "no"
     networks: [pii_net]
 
@@ -125,6 +120,8 @@ services:
       - OPENAI_API_KEY=${LITELLM_MASTER_KEY}
       - ENABLE_OLLAMA_API=false
       - WEBUI_AUTH=false
+      - TASK_MODEL_EXTERNAL=gemma3:1b
+      - ENABLE_PERSISTENT_CONFIG=false
     volumes:
       - openwebui_data:/app/backend/data
     networks: [pii_net]

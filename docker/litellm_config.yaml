@@ -4,6 +4,11 @@ model_list:
       model: "ollama_chat/gemma3:4b"
       api_base: http://ollama:11434
 
+  - model_name: "gemma3:1b"
+    litellm_params:
+      model: "ollama_chat/gemma3:1b"
+      api_base: http://ollama:11434
+
 guardrails:
   - guardrail_name: "pii-filter"
     litellm_params:
