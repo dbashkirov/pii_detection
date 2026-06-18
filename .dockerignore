@@ -7,10 +7,11 @@
 # Секреты
 .env
 
-# Обучающие данные и ноутбуки — не нужны в образе
+# Обучающие данные, модели и ноутбуки — не нужны в образе
 training/data/
 training/data_gen/
 training/notebooks/
+training/models/
 
 # Документация и медиа
 docs/
@@ -32,6 +33,5 @@ venv/
 env/
 
 # Что попадает в образ pii-service:
-# pii_detector/                          → код детектора
-# training/models/model-best-combo-0.78/ → spaCy-модель (638 МБ, кешируется)
-# docker/                                → Dockerfile и main.py
+# pii_detector/  → код детектора
+# docker/        → Dockerfile и main.py

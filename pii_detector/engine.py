@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry, RecognizerResult
@@ -35,9 +36,15 @@ class HybridPIIDetector:
         self._anonymizer = AnonymizerEngine()
 
     @staticmethod
+    def _resolve_model_path(path: str) -> str:
+        if not os.path.exists(path):
+            from huggingface_hub import snapshot_download
+            return snapshot_download(repo_id=path)
+        return path
+
+    @staticmethod
     def _build_analyzer(spacy_model_path: str, ner_strength: float) -> AnalyzerEngine:
-        # Use the trained spaCy NER model as the Presidio NLP engine.
-        # spacy.load() accepts both installed package names and file-system paths.
+        spacy_model_path = HybridPIIDetector._resolve_model_path(spacy_model_path)
         nlp_configuration = {
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "en", "model_name": spacy_model_path}],

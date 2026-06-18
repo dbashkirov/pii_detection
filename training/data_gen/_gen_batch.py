@@ -1,100 +1,89 @@
 import json
 
-# SPECS 3031-3040
+# SPECS 4491-4500
 
-chat_3031 = [
-    {"role": "user", "content": "Доброслав Сидоров, г. Забайкальск, наб. 9 мая, д. 12, кв. 135. Подтвердите получение документов."},
-    {"role": "assistant", "content": "Документы получены и переданы в обработку."},
+chat_4491 = [
+    {"role": "user", "content": "Привет, можешь подсказать по заказу?"},
+    {"role": "assistant", "content": "Конечно, куда доставка? г. Вуктыл, пер. Радужная, д. 94, кв. 277 — верно?"},
+    {"role": "user", "content": "Да, всё точно."},
 ]
 
-chat_3032 = [
-    {"role": "user", "content": "Татьяна Семеновна и Фока Демидович — оба записаны в одно время?! Полный пиздец!"},
-    {"role": "assistant", "content": "Приносим извинения, сейчас исправим ошибку в расписании."},
-]
-
-chat_3035 = [
-    {"role": "user", "content": "Почему в одну запись добавили сразу двух человек?"},
-    {"role": "assistant", "content": "Поясните, пожалуйста, о каких записях идёт речь."},
-    {"role": "user", "content": "Клавдий Демьянович Фокин и София Андреевна Тимофеева — оба в одном слоте! Это невозможно!"},
-    {"role": "assistant", "content": "Понял, исправляем немедленно. Прошу прощения за неудобство."},
-]
-
-chat_3039 = [
-    {"role": "user", "content": "Родионов Радован Игнатьевич только что выиграл в нашем конкурсе!"},
-    {"role": "assistant", "content": "Замечательно! Поздравляем победителя!"},
-    {"role": "user", "content": "Передайте Родионов Радован Игнатьевич, что приз уже ждёт его!"},
+chat_4496 = [
+    {"role": "user", "content": "Почему до сих пор не обработана моя заявка?"},
+    {"role": "user", "content": "Александра Ильинична Терентьева, подавала ещё неделю назад!"},
+    {"role": "assistant", "content": "Прошу прощения за задержку, проверяю информацию."},
 ]
 
 records = [
-    # 3031 — BOTH DIALOG NAME_FI ADDR_FULL formal short neutral position=beginning
-    {"id": "dialog_synth_3031", "domain": "DIALOG", "entity_type": "BOTH", "name_form": "NAME_FI", "addr_form": "ADDR_FULL",
-     "style": "formal", "length": "short", "expression": "neutral", "neg_category": None,
-     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "beginning",
-     "text": json.dumps(chat_3031, ensure_ascii=False),
-     "entities": [{"text": "Доброслав Сидоров", "type": "NAME"}, {"text": "г. Забайкальск, наб. 9 мая, д. 12, кв. 135", "type": "ADDRESS"}]},
-
-    # 3032 — NAME_ONLY DIALOG NAME_IO informal medium rage multi_entity=true position=beginning
-    {"id": "dialog_synth_3032", "domain": "DIALOG", "entity_type": "NAME_ONLY", "name_form": "NAME_IO", "addr_form": None,
-     "style": "informal", "length": "medium", "expression": "rage", "neg_category": None,
-     "edge_case": None, "has_typo": False, "multi_entity": True, "position": "beginning",
-     "text": json.dumps(chat_3032, ensure_ascii=False),
-     "entities": [{"text": "Татьяна Семеновна", "type": "NAME"}, {"text": "Фока Демидович", "type": "NAME"}]},
-
-    # 3033 — ADDRESS_ONLY GOV ADDR_CSH informal medium sad position=end
-    {"id": "gov_synth_3033", "domain": "GOV", "entity_type": "ADDRESS_ONLY", "name_form": None, "addr_form": "ADDR_CSH",
-     "style": "informal", "length": "medium", "expression": "sad", "neg_category": None,
-     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "end",
-     "text": "Жалоба подана уже месяц назад, проверяющие до сих пор не появились. Все обращения остаются без ответа. Всё это происходит по адресу Красная Поляна, бул. Лесхозная 16 — жители устали ждать.",
-     "entities": [{"text": "Красная Поляна, бул. Лесхозная 16", "type": "ADDRESS"}]},
-
-    # 3034 — NEGATIVE DELIVERY mixed medium neutral org_names
-    {"id": "neg_synth_3034", "domain": "DELIVERY", "entity_type": "NEGATIVE", "name_form": None, "addr_form": None,
-     "style": "mixed", "length": "medium", "expression": "neutral", "neg_category": "org_names",
-     "edge_case": None, "has_typo": False, "multi_entity": False, "position": None,
-     "text": "Заказ принят от ООО Иванов и партнёры. Всё оформлено в соответствии с договором поставки. Доставка планируется в течение трёх рабочих дней.",
-     "entities": []},
-
-    # 3035 — NAME_ONLY DIALOG NAME_FIO mixed long irritated multi_entity=true position=middle
-    {"id": "dialog_synth_3035", "domain": "DIALOG", "entity_type": "NAME_ONLY", "name_form": "NAME_FIO", "addr_form": None,
-     "style": "mixed", "length": "long", "expression": "irritated", "neg_category": None,
-     "edge_case": None, "has_typo": False, "multi_entity": True, "position": "middle",
-     "text": json.dumps(chat_3035, ensure_ascii=False),
-     "entities": [{"text": "Клавдий Демьянович Фокин", "type": "NAME"}, {"text": "София Андреевна Тимофеева", "type": "NAME"}]},
-
-    # 3036 — NAME_ONLY AUTO NAME_FIO_DAT formal long neutral position=middle
-    {"id": "auto_synth_3036", "domain": "AUTO", "entity_type": "NAME_ONLY", "name_form": "NAME_FIO_DAT", "addr_form": None,
-     "style": "formal", "length": "long", "expression": "neutral", "neg_category": None,
+    # 4491 — ADDRESS_ONLY DIALOG ADDR_FULL informal medium neutral position=middle
+    {"id": "dialog_synth_4491", "domain": "DIALOG", "entity_type": "ADDRESS_ONLY", "name_form": None, "addr_form": "ADDR_FULL",
+     "style": "informal", "length": "medium", "expression": "neutral", "neg_category": None,
      "edge_case": None, "has_typo": False, "multi_entity": False, "position": "middle",
-     "text": "Страховой полис ОСАГО направлен в офис для проверки. Уведомление о готовности документов будет отправлено Гавриловой Василисе Феликсовне в установленные сроки. Просим клиента иметь при себе паспорт при получении.",
-     "entities": [{"text": "Гавриловой Василисе Феликсовне", "type": "NAME"}]},
+     "text": json.dumps(chat_4491, ensure_ascii=False),
+     "entities": [{"text": "г. Вуктыл, пер. Радужная, д. 94, кв. 277", "type": "ADDRESS"}]},
 
-    # 3037 — NAME_CONTEXT AUTO NAME_FI formal medium rage position=mixed
-    {"id": "auto_synth_3037", "domain": "AUTO", "entity_type": "NAME_CONTEXT", "name_form": "NAME_FI", "addr_form": None,
-     "style": "formal", "length": "medium", "expression": "rage", "neg_category": None,
+    # 4492 — BOTH BANK NAME_FIO ADDR_CSH informal long neutral position=mixed
+    {"id": "bank_synth_4492", "domain": "BANK", "entity_type": "BOTH", "name_form": "NAME_FIO", "addr_form": "ADDR_CSH",
+     "style": "informal", "length": "long", "expression": "neutral", "neg_category": None,
      "edge_case": None, "has_typo": False, "multi_entity": False, "position": "mixed",
-     "text": "Степан Кудряшов подал жалобу три недели назад, и до сих пор ни хрена не сделано. Контактный номер +7 901 555-12-34 передан в отдел, но никто не перезвонил. Это сраное безобразие — Степан Кудряшов заслуживает нормального ответа.",
-     "entities": [{"text": "Степан Кудряшов", "type": "NAME"}]},
+     "text": "Заявка на ипотеку подана через мобильное приложение банка. Все документы загружены и проверены автоматической системой. Моисей Германович Красильников указан основным заёмщиком в анкете. Адрес объекта залога — Усть-Баргузин, пр. Березовая 169, прописан в кадастровых документах.",
+     "entities": [{"text": "Моисей Германович Красильников", "type": "NAME"}, {"text": "Усть-Баргузин, пр. Березовая 169", "type": "ADDRESS"}]},
 
-    # 3038 — NEGATIVE LEGAL formal medium urgent neutral_service
-    {"id": "neg_synth_3038", "domain": "LEGAL", "entity_type": "NEGATIVE", "name_form": None, "addr_form": None,
-     "style": "formal", "length": "medium", "expression": "urgent", "neg_category": "neutral_service",
+    # 4493 — NAME_ONLY SOCIAL NAME_FI informal medium worried edge_case=hyphenated_surname position=middle
+    {"id": "social_synth_4493", "domain": "SOCIAL", "entity_type": "NAME_ONLY", "name_form": "NAME_FI", "addr_form": None,
+     "style": "informal", "length": "medium", "expression": "worried", "neg_category": None,
+     "edge_case": "hyphenated_surname", "has_typo": False, "multi_entity": False, "position": "middle",
+     "text": "В чате класса все обсуждают завтрашнюю контрольную. Агата Жукова-Григорьева переживает, что не успела повторить тему. Надеюсь, всё обойдётся.",
+     "entities": [{"text": "Агата Жукова-Григорьева", "type": "NAME"}]},
+
+    # 4494 — NEGATIVE GOV professions_roles formal medium joy
+    {"id": "neg_synth_4494", "domain": "GOV", "entity_type": "NEGATIVE", "name_form": None, "addr_form": None,
+     "style": "formal", "length": "medium", "expression": "joy", "neg_category": "professions_roles",
      "edge_case": None, "has_typo": False, "multi_entity": False, "position": None,
-     "text": "Сделка проходит регистрацию в установленном порядке. Срочно требуется предоставить дополнительные документы для завершения процедуры. Промедление может привести к аннулированию заявки.",
+     "text": "Специалист отдела приёма граждан провёл консультацию быстро и доброжелательно. Очень приятно, когда обращение в госучреждение проходит так гладко.",
      "entities": []},
 
-    # 3039 — NAME_ONLY DIALOG NAME_IFO mixed medium joy position=mixed
-    {"id": "dialog_synth_3039", "domain": "DIALOG", "entity_type": "NAME_ONLY", "name_form": "NAME_IFO", "addr_form": None,
-     "style": "mixed", "length": "medium", "expression": "joy", "neg_category": None,
+    # 4495 — NAME_ONLY HR NAME_FI mixed long neutral position=mixed
+    {"id": "hr_synth_4495", "domain": "HR", "entity_type": "NAME_ONLY", "name_form": "NAME_FI", "addr_form": None,
+     "style": "mixed", "length": "long", "expression": "neutral", "neg_category": None,
      "edge_case": None, "has_typo": False, "multi_entity": False, "position": "mixed",
-     "text": json.dumps(chat_3039, ensure_ascii=False),
-     "entities": [{"text": "Родионов Радован Игнатьевич", "type": "NAME"}]},
+     "text": "Собеседование назначено на следующую неделю в офисе компании. Алла Константинова прислала резюме и сопроводительное письмо заранее. Отдел кадров уже согласовал время встречи с руководителем. Алла Константинова подтвердила своё участие по электронной почте.",
+     "entities": [{"text": "Алла Константинова", "type": "NAME"}]},
 
-    # 3040 — NEGATIVE DELIVERY formal medium neutral address_fragments
-    {"id": "neg_synth_3040", "domain": "DELIVERY", "entity_type": "NEGATIVE", "name_form": None, "addr_form": None,
-     "style": "formal", "length": "medium", "expression": "neutral", "neg_category": "address_fragments",
+    # 4496 — NAME_ONLY DIALOG NAME_FIO formal medium irritated position=middle
+    {"id": "dialog_synth_4496", "domain": "DIALOG", "entity_type": "NAME_ONLY", "name_form": "NAME_FIO", "addr_form": None,
+     "style": "formal", "length": "medium", "expression": "irritated", "neg_category": None,
+     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "middle",
+     "text": json.dumps(chat_4496, ensure_ascii=False),
+     "entities": [{"text": "Александра Ильинична Терентьева", "type": "NAME"}]},
+
+    # 4497 — NAME_ONLY AUTO NAME_FI informal medium sad position=middle
+    {"id": "auto_synth_4497", "domain": "AUTO", "entity_type": "NAME_ONLY", "name_form": "NAME_FI", "addr_form": None,
+     "style": "informal", "length": "medium", "expression": "sad", "neg_category": None,
+     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "middle",
+     "text": "Машину разбили на парковке у дома. Зоя Захарова очень расстроена, ведь авто было совсем новым. Страховая обещала перезвонить позже.",
+     "entities": [{"text": "Зоя Захарова", "type": "NAME"}]},
+
+    # 4498 — NAME_ONLY TELECOM NAME_FI_GEN formal long sad position=end
+    {"id": "st_synth_4498", "domain": "TELECOM", "entity_type": "NAME_ONLY", "name_form": "NAME_FI_GEN", "addr_form": None,
+     "style": "formal", "length": "long", "expression": "sad", "neg_category": None,
+     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "end",
+     "text": "Заявка на отключение услуги была подана через личный кабинет. Все технические работы проведены в стандартные сроки. Оператор связи зафиксировал расторжение договора в системе. Очень жаль, что пришлось отказаться от услуг именно для Евгении Дроздовой.",
+     "entities": [{"text": "Евгении Дроздовой", "type": "NAME"}]},
+
+    # 4499 — NEGATIVE DELIVERY neutral_service informal medium neutral
+    {"id": "neg_synth_4499", "domain": "DELIVERY", "entity_type": "NEGATIVE", "name_form": None, "addr_form": None,
+     "style": "informal", "length": "medium", "expression": "neutral", "neg_category": "neutral_service",
      "edge_case": None, "has_typo": False, "multi_entity": False, "position": None,
-     "text": "Груз доставляется на 2-й этаж, правое крыло здания. Контактное лицо будет уведомлено за час до прибытия курьера.",
+     "text": "Заказ подтверждён, всё ок. Курьер выехал, скоро будет на месте.",
      "entities": []},
+
+    # 4500 — NAME_CONTEXT HR NAME_IFO formal long joy position=end
+    {"id": "hr_synth_4500", "domain": "HR", "entity_type": "NAME_CONTEXT", "name_form": "NAME_IFO", "addr_form": None,
+     "style": "formal", "length": "long", "expression": "joy", "neg_category": None,
+     "edge_case": None, "has_typo": False, "multi_entity": False, "position": "end",
+     "text": "Собеседование прошло в тёплой и доброжелательной атмосфере. Кандидат показал отличные профессиональные навыки и опыт работы. Руководитель отдела остался очень довольным результатами встречи. Уведомление о приёме на работу будет получено по адресу электронной почты subbotina.oksana@mail.ru, который указала Субботина Оксана Анатольевна.",
+     "entities": [{"text": "Субботина Оксана Анатольевна", "type": "NAME"}]},
 ]
 
 for r in records:

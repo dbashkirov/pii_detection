@@ -108,18 +108,19 @@ NAME_FORM_PROBS = {
     "NAME_FIO_DAT": 0.01,
 }
 
-ADDR_FORM_PROBS = {
-    "ADDR_FULL": 0.20,
-    "ADDR_CSH": 0.20,
-    "ADDR_SHA": 0.15,
-    "ADDR_SH": 0.15,
-    "ADDR_SHAP": 0.10,
-    "ADDR_ABBR": 0.05,
-    "ADDR_WORDS": 0.05,
-    "ADDR_REGION": 0.05,
-    "ADDR_LOW": 0.03,
-    "ADDR_INDEX": 0.02,
-}
+ADDR_FORM_PROBS = normalize({
+    "ADDR_FULL":     0.18,
+    "ADDR_CSH":      0.17,
+    "ADDR_SHA":      0.13,
+    "ADDR_SH":       0.13,
+    "ADDR_SHAP":     0.09,
+    "ADDR_WORDS":    0.05,
+    "ADDR_REGION":   0.05,
+    "ADDR_INDEX":    0.02,
+    "ADDR_BARE":     0.10,
+    "ADDR_CSH_BARE": 0.09,
+    "ADDR_SHC":      0.06,
+})
 
 # ---------------------------------------------------------------------------
 # Стиль и длина
@@ -170,15 +171,14 @@ EXPRESSION_PROBS = {
 # Негативные примеры
 # ---------------------------------------------------------------------------
 
-NEG_CATEGORY_PROBS = {
+NEG_CATEGORY_PROBS = normalize({
     "professions_roles": 0.25,
-    "city_homonyms": 0.15,
     "memorial_streets": 0.15,
     "address_fragments": 0.15,
     "email_names": 0.10,
     "neutral_service": 0.15,
     "org_names": 0.05,
-}
+})
 
 # ---------------------------------------------------------------------------
 # Edge cases (вероятность 20% среди позитивных)
@@ -188,20 +188,21 @@ EDGE_CASE_PROB = 0.20
 
 EDGE_CASES_NAME = [
     "hyphenated_surname",
-    "non_slavic_name",
     "name_with_title",
     "initials_no_space",
     "name_in_brackets",
     "declined_full_fio",
+    "lowercase_name",
 ]
 
 EDGE_CASES_ADDR = [
     "abbr_no_dot",
     "complex_house_number",
     "no_space_after_dot",
-    "lowercase_city",
     "typo_in_addr",
     "village_vs_house_d",
+    "lowercase_addr",
+    "entrance_abbr",
 ]
 
 
@@ -258,10 +259,6 @@ def _apply_addr_edge(city, st_type, st_name, house, edge_case):
         st_type = st_type.rstrip(".")
     elif edge_case == "complex_house_number":
         house = house + random.choice(_HOUSE_SUFFIXES)
-    elif edge_case == "lowercase_city":
-        city = city.lower()
-        st_type = st_type.lower()
-        st_name = st_name.lower()
     elif edge_case == "village_vs_house_d":
         city = "д. " + fake.city_name()
         house = str(fake.random_int(1, 50))
@@ -269,28 +266,40 @@ def _apply_addr_edge(city, st_type, st_name, house, edge_case):
         extra["no_space"] = True
     elif edge_case == "typo_in_addr":
         extra["typo"] = True
+    elif edge_case == "lowercase_addr":
+        extra["lowercase_addr"] = True
+    elif edge_case == "entrance_abbr":
+        extra["entrance_abbr"] = True
     return city, st_type, st_name, house, extra
 
 
 def _compose(addr_form, city, city_abbr, st_type, st_name, house, apt, entrance, postcode, region, extra):
     no_space = extra.get("no_space", False)
+    entrance_abbr = extra.get("entrance_abbr", False)
 
     def sep(s):
         return s.replace(". ", ".") if no_space else s
+
+    def entr(n):
+        return f"{n} под" if entrance_abbr else f"подъезд {n}"
 
     mapping = {
         "ADDR_FULL": f"г. {city}, {sep(st_type + ' ')}{st_name}, д. {house}, кв. {apt}",
         "ADDR_CSH": f"{city}, {sep(st_type + ' ')}{st_name} {house}",
         "ADDR_SHA": f"{sep(st_type + ' ')}{st_name} {house} кв. {apt}",
         "ADDR_SH": f"{sep(st_type + ' ')}{st_name} {house}",
-        "ADDR_SHAP": f"{sep(st_type + ' ')}{st_name} {house} кв. {apt} подъезд {entrance}",
-        "ADDR_ABBR": f"{city_abbr}, {st_name} {house} кв {apt}",
+        "ADDR_SHAP": f"{sep(st_type + ' ')}{st_name} {house} кв. {apt}, {entr(entrance)}",
         "ADDR_WORDS": f"улица {st_name} дом {house} квартира {apt}",
         "ADDR_REGION": f"{region}, {city}, {sep(st_type + ' ')}{st_name} {house}",
-        "ADDR_LOW": f"{st_type} {st_name} {house} кв. {apt}".lower(),
         "ADDR_INDEX": f"{postcode}, г. {city}, {sep(st_type + ' ')}{st_name}, д. {house}",
+        "ADDR_BARE": f"{st_name} {house}",
+        "ADDR_CSH_BARE": f"{city}, {st_name} {house}",
+        "ADDR_SHC": f"{sep(st_type + ' ')}{st_name} {house}, {city}",
     }
     result = mapping.get(addr_form, f"{st_type} {st_name} {house}")
+
+    if extra.get("lowercase_addr"):
+        result = result.lower()
 
     if extra.get("typo"):
         for correct, wrong in _TYPO_MAP.items():

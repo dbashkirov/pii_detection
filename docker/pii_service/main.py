@@ -65,7 +65,7 @@ _detector = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _detector
-    model_path = os.environ.get("PII_SPACY_MODEL_PATH", "/app/model-best-combo-0.78")
+    model_path = os.environ.get("PII_SPACY_MODEL_PATH", "alrosait/spacy_ru_core_news_lg_pii")
     logger.info(f"Загружаем HybridPIIDetector из {model_path} ...")
     from pii_detector import HybridPIIDetector
     _detector = HybridPIIDetector(spacy_model_path=model_path)

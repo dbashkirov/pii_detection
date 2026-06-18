@@ -2,21 +2,29 @@
     training/data/dev.spacy   + training/data/dev_synth.spacy   → training/data/dev_combo.spacy
     training/data/train.spacy + training/data/train_synth.spacy → training/data/train_combo.spacy
 """
+import random
 import spacy
 from spacy.tokens import DocBin
 from pathlib import Path
 
+SEED = 42
+
 
 def merge(paths_in: list, path_out: Path, vocab) -> None:
-    db_out = DocBin()
+    all_docs = []
     for p in paths_in:
         db = DocBin().from_disk(p)
         docs = list(db.get_docs(vocab))
-        for doc in docs:
-            db_out.add(doc)
+        all_docs.extend(docs)
         print(f"  + {p}  ({len(docs)} docs)")
+
+    random.Random(SEED).shuffle(all_docs)
+
+    db_out = DocBin()
+    for doc in all_docs:
+        db_out.add(doc)
     db_out.to_disk(path_out)
-    print(f"  → Saved {path_out}  (total {len(db_out)} docs)\n")
+    print(f"  → Saved {path_out}  (total {len(db_out)} docs, shuffled)\n")
 
 
 nlp = spacy.blank("ru")

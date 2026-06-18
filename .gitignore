@@ -2,3 +2,6 @@
 **/__pycache__/
 .claude/
 /docker/.env
+training/models/
+training/data_gen/output/
+/.agents/

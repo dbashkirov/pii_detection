@@ -1,3 +1,4 @@
+huggingface_hub>=0.25
 fastapi>=0.136,<1.0
 uvicorn[standard]>=0.48,<1.0
 presidio-analyzer>=2.2.362,<3.0
