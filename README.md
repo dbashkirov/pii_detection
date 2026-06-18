@@ -8,6 +8,10 @@
 Предназначен для встраивания в LLM-прокси или любой сервис, 
 где нужно перехватывать персональные данные до отправки во внешние системы.
 
+**Артефакты на Hugging Face:**
+- NER Модель: [alrosait/spacy_ru_core_news_lg_pii](https://huggingface.co/alrosait/spacy_ru_core_news_lg_pii)
+- Синтетический датасет: [alrosait/pii-synthetic-ru](https://huggingface.co/datasets/alrosait/pii-synthetic-ru)
+
 ---
 
 ## Детектируемые типы
