@@ -1,0 +1,30 @@
+# «Стало»: guardrail docker/litellm/pii_guardrail.py поверх /mask pii-service.
+model_list:
+  - model_name: echo
+    litellm_params: {model: openai/echo, api_base: http://mock:8000/v1, api_key: e2e}
+  - model_name: echo-reasoning
+    litellm_params: {model: openai/echo-reasoning, api_base: http://mock:8000/v1, api_key: e2e}
+  - model_name: echo-tools
+    litellm_params: {model: openai/echo-tools, api_base: http://mock:8000/v1, api_key: e2e}
+
+guardrails:
+  - guardrail_name: pii-filter
+    litellm_params:
+      guardrail: pii_guardrail.PIIGuardrail
+      mode: [pre_call, post_call]
+      default_on: true
+      pii_api_base: http://pii-service:5001
+      pii_policy:
+        NAME: PSEUDONYMIZE
+        BANK_CARD_NUMBER: BLOCK
+        CVC: BLOCK
+        TOKEN: BLOCK
+      pii_allow_list: ["Сухой Лог"]
+
+litellm_settings:
+  request_timeout: 120
+  turn_off_message_logging: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_prompts_in_spend_logs: false

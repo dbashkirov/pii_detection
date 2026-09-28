@@ -72,6 +72,27 @@ _CAND_RE = re.compile(r'[A-Za-z0-9+/=_\-]+(?:\.[A-Za-z0-9+/=_\-]+)*')
 _NO_CTX = (3.5, 32)  # (min_entropy, min_len) без контекста
 _CTX = (3.3, 16)  # с контекстом
 
+# Хэши (sha256-digest образа, коммит git, md5) — высокоэнтропийные, но не секреты.
+# Пропускаем hex-строку стандартной длины с префиксом алгоритма или рядом со словами про хэш,
+# если рядом нет явного маркера секрета («token:», «api key:»…).
+_HEX_RE = re.compile(r'[0-9a-fA-F]+')
+_HASH_LENGTHS = {32, 40, 56, 64, 96, 128}
+_HASH_PREFIX_RE = re.compile(r'(?:sha(?:1|224|256|384|512)|md5)[:=@-]$', re.IGNORECASE)
+_HASH_MARKERS = ['digest', 'sha', 'commit', 'коммит', 'hash', 'хэш', 'хеш', 'checksum', 'контрольн']
+
+
+def _is_hash(text: str, start: int, end: int) -> bool:
+    candidate = text[start:end]
+    if len(candidate) not in _HASH_LENGTHS or not _HEX_RE.fullmatch(candidate):
+        return False
+    if _has_strong_ctx(text, start, end):
+        return False
+    if _HASH_PREFIX_RE.search(text[max(0, start - 8):start]):
+        return True
+    c = _ctx(text, start, end, window=40)
+    return any(m in c for m in _HASH_MARKERS)
+
+
 # ── Type 3: OTP ───────────────────────────────────────────────────────────────
 _OTP_RE = re.compile(r'\b\d{4,8}\b')
 
@@ -115,6 +136,8 @@ class TokenRecognizer(EntityRecognizer):
             has_ctx = _has_token_ctx(text, m.start(), m.end())
             min_ent, min_len = _CTX if has_ctx else _NO_CTX
             if len(candidate) < min_len or _entropy(candidate) < min_ent:
+                continue
+            if _is_hash(text, m.start(), m.end()):
                 continue
             score = 0.90 if _has_strong_ctx(text, m.start(), m.end()) else 0.75 if has_ctx else 0.65
             seen.add(span)

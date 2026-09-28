@@ -1,0 +1,41 @@
+# e2e-стенд guardrail: заглушка модели пишет всё, что уходит из LiteLLM, в $E2E_LOG_DIR/upstream.jsonl.
+# «Было» и «стало» можно поднять рядом — см. docker/e2e/README.md.
+#
+# Для кейсов с настоящими моделями добавьте их в конфиг (api_base/api_key: os.environ/REAL_API_BASE,
+# os.environ/REAL_API_KEY) и передайте ключ через окружение.
+
+services:
+  pg:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: litellm, POSTGRES_PASSWORD: e2e, POSTGRES_DB: litellm}
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U litellm"], interval: 5s, retries: 20}
+
+  mock:
+    image: python:3.12-slim
+    command: ["python", "-u", "/app/mock_upstream.py"]
+    volumes: ["./mock_upstream.py:/app/mock_upstream.py:ro", "${E2E_LOG_DIR:-./log/after}:/log"]
+
+  pii-service:
+    image: ${PII_IMAGE:-pii-service:e2e}
+    build:
+      context: ../..
+      dockerfile: docker/pii_service/Dockerfile
+    healthcheck: {test: ["CMD", "curl", "-sf", "http://localhost:5001/health"], interval: 5s, retries: 60, start_period: 30s}
+    ports: ["127.0.0.1:${PII_PORT:-35001}:5001"]
+
+  litellm:
+    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:v1.100.1}
+    command: ["--config", "/app/litellm_config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: sk-e2e-master-key
+      DATABASE_URL: postgresql://litellm:e2e@pg:5432/litellm
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      REAL_API_BASE: ${REAL_API_BASE:-}
+      REAL_API_KEY: ${REAL_API_KEY:-}
+    volumes:
+      - ./${E2E_CONFIG:-litellm_after.yaml}:/app/litellm_config.yaml:ro
+      - ../litellm/pii_guardrail.py:/app/pii_guardrail.py:ro
+    ports: ["127.0.0.1:${LITELLM_PORT:-34000}:4000"]
+    depends_on:
+      pg: {condition: service_healthy}
+      pii-service: {condition: service_healthy}

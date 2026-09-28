@@ -56,6 +56,8 @@
 │   ├── engine.py              # HybridPIIDetector
 │   ├── config.py              # Пути к модели, список типов
 │   ├── validators.py          # Контрольные суммы (ИНН, СНИЛС, ОГРН, Луна)
+│   ├── masking.py             # Маскирование всех текстов запроса к LLM (/mask)
+│   ├── pseudonymizer.py       # Псевдонимы ФИО с сохранением рода и падежа
 │   └── recognizers/
 │       ├── detectors.py       # 10 regex/pattern recognizers
 │       └── token.py           # TokenRecognizer
@@ -73,9 +75,12 @@
 │
 ├── docker/                    # Локальный демо-стенд
 │   ├── pii_service/           # FastAPI-обёртка над детектором
-│   │   ├── main.py            # Эндпоинты /analyze и /anonymize
+│   │   ├── main.py            # Эндпоинты /mask, /analyze и /anonymize
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
+│   ├── litellm/
+│   │   └── pii_guardrail.py   # Guardrail LiteLLM поверх /mask
+│   ├── e2e/                   # Тест-кейсы guardrail: заглушка модели, «было/стало»
 │   ├── docker-compose.yml
 │   ├── litellm_config.yaml    # Конфигурация LiteLLM и guardrail
 │   ├── .env.example
@@ -83,12 +88,15 @@
 │
 ├── docs/                      # Документация
 │   ├── experiments.md         # Сравнение моделей на pii-bench
+│   ├── litellm_guardrail.md   # Guardrail LiteLLM: тест-кейсы, было/стало
 │   ├── finetune_spacy.md      # Детали дообучения NER
 │   ├── synth_generation.md    # Генерация синтетических данных
 │   └── images/
 │
 ├── notebooks/                 # Демо и примеры использования
 │   └── demo.ipynb
+│
+├── tests/                     # pytest: маскирование, псевдонимы, обратная замена
 │
 └── README.md
 ```
@@ -97,7 +105,7 @@
 
 ## Демо-стенд
 
-Локальный LLM-стек с PII-фильтрацией в диалоге: Open WebUI → LiteLLM (нативный Presidio guardrail) → Ollama. Все запросы остаются на машине. Политика — `MASK` (ПД заменяются плейсхолдерами до LLM, обратно подставляются исходные) или `BLOCK` (HTTP 400).
+Локальный LLM-стек с PII-фильтрацией в диалоге: Open WebUI → LiteLLM (guardrail `docker/litellm/pii_guardrail.py`) → Ollama. Все запросы остаются на машине. Политика по типам — `PSEUDONYMIZE` (ФИО → правдоподобное ФИО в том же падеже), `MASK` (метки до LLM, обратно подставляются исходные), `BLOCK` (HTTP 400) или `ALLOW`. Почему не встроенный guardrail `presidio` LiteLLM — [`docs/litellm_guardrail.md`](docs/litellm_guardrail.md).
 
 ```bash
 cp docker/.env.example docker/.env  # заполнить секреты по примеру
