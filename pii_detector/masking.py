@@ -78,14 +78,17 @@ def mask_texts(
         policy: Optional[Dict[str, str]] = None,
         score_thresholds: Optional[Dict[str, float]] = None,
         allow_list: Iterable[str] = (),
+        deadline: Optional[float] = None,
 ) -> MaskResult:
+    """deadline — момент по time.monotonic(), после которого маскирование прерывается
+    (chunking.DeadlineExceeded): клиент уже не ждёт ответа."""
     policy = {**DEFAULT_POLICY, **(policy or {})}
     thresholds = score_thresholds or {}
     allow_list = list(allow_list)
 
     found = []
     for text in texts:
-        results = detector.analyze(text)
+        results = detector.analyze(text, deadline=deadline)
         results = [r for r in results
                    if r.score >= thresholds.get(r.entity_type, thresholds.get("ALL", 0.0))]
         results = _drop_allowed(text, results, allow_list)

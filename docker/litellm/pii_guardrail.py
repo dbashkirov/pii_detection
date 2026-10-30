@@ -4,7 +4,8 @@
 вызовом отправляются в pii-service /mask. Сервис заменяет ПД сквозными метками (одно значение —
 одна метка во всём запросе), ФИО — псевдонимами в нужном падеже, и возвращает пары для обратной
 замены. Найден тип с политикой BLOCK — запрос отклоняется (400). pii-service недоступен — запрос
-тоже отклоняется (503): без проверки в модель ничего не уходит.
+тоже отклоняется (503): без проверки в модель ничего не уходит. Так же — запрос длиннее предела
+сервиса (413) и проверка дольше pii_timeout (504): тогда сервис сам бросает работу.
 
 Ответ: исходные значения возвращаются в content, reasoning_content и аргументы tool calls. В стриме
 чанки не копятся до конца ответа: придерживается только хвост, в котором может быть недописанная
@@ -215,14 +216,38 @@ class PIIGuardrail(CustomGuardrail):
                 "policy": self.pii_policy,
                 "score_thresholds": self.pii_score_thresholds,
                 "allow_list": self.pii_allow_list,
+                # Не успел за это время — сервис бросает работу (504), а не считает впустую.
+                "timeout": self.pii_timeout,
             })
+        except httpx.TimeoutException:
+            raise self._too_slow()
+        except Exception as e:
+            raise self._unavailable(e)
+        if response.status_code == 413:
+            raise HTTPException(status_code=413, detail={
+                "error": "Запрос слишком длинный для проверки персональных данных и не отправлен в модель: "
+                         "сократите документ или начните новый чат"})
+        if response.status_code == 504:
+            raise self._too_slow()
+        try:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            # Текст исключения может содержать тело запроса — пишем только тип.
-            verbose_proxy_logger.error("PII guardrail: pii-service недоступен (%s)", type(e).__name__)
-            raise HTTPException(status_code=503, detail={
-                "error": "Сервис проверки персональных данных недоступен, запрос не отправлен в модель"})
+            raise self._unavailable(e)
+
+    def _too_slow(self) -> HTTPException:
+        verbose_proxy_logger.error("PII guardrail: pii-service не успел за %s с", self.pii_timeout)
+        return HTTPException(status_code=504, detail={
+            "error": f"Проверка персональных данных не успела за {self.pii_timeout:g} с, запрос не отправлен "
+                     "в модель: он слишком длинный (документ, длинная история чата) или сервис перегружен. "
+                     "Сократите запрос, начните новый чат или повторите позже"})
+
+    @staticmethod
+    def _unavailable(e: Exception) -> HTTPException:
+        # Текст исключения может содержать тело запроса — пишем только тип.
+        verbose_proxy_logger.error("PII guardrail: pii-service недоступен (%s)", type(e).__name__)
+        return HTTPException(status_code=503, detail={
+            "error": "Сервис проверки персональных данных недоступен, запрос не отправлен в модель"})
 
     # ── хуки LiteLLM ─────────────────────────────────────────────────────────
 

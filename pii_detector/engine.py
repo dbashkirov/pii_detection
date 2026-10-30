@@ -1,5 +1,6 @@
 import os
-from typing import List
+import time
+from typing import List, Optional
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpEngineProvider
@@ -10,7 +11,11 @@ from pii_detector.config import (
     SPACY_NER_MODEL,
     SPACY_NER_STRENGTH,
     ALL_ENTITIES,
+    CHUNK_CHARS,
+    CHUNK_OVERLAP,
+    MAX_PARALLEL,
 )
+from pii_detector.chunking import DeadlineExceeded, FairSlots, analyze_in_chunks
 from pii_detector.recognizers.detectors import (
     InnRecognizer, SnilsRecognizer, OgrnRecognizer,
     OgrnipRecognizer, KppRecognizer, PassportRecognizer,
@@ -22,7 +27,10 @@ from pii_detector.recognizers.token import TokenRecognizer
 class HybridPIIDetector:
     def __init__(self,
                  spacy_model_path: str = SPACY_NER_MODEL,
-                 ner_strength: float = SPACY_NER_STRENGTH):
+                 ner_strength: float = SPACY_NER_STRENGTH,
+                 chunk_chars: int = CHUNK_CHARS,
+                 chunk_overlap: int = CHUNK_OVERLAP,
+                 max_parallel: int = MAX_PARALLEL):
         """
         Parameters
         ----------
@@ -31,9 +39,17 @@ class HybridPIIDetector:
             Defaults to SPACY_NER_MODEL from config.
         ner_strength : float
             Confidence score assigned by SpacyRecognizer to NAME / ADDRESS entities.
+        chunk_chars, chunk_overlap : int
+            Longer texts are analyzed in chunks of chunk_chars, each with chunk_overlap of context
+            on both sides (see chunking.py): peak memory depends on the chunk, not the whole text.
+        max_parallel : int
+            How many chunks may be analyzed at once across all requests (threads of the web server).
         """
         self._analyzer = self._build_analyzer(spacy_model_path, ner_strength)
         self._anonymizer = AnonymizerEngine()
+        self._chunk_chars = chunk_chars
+        self._chunk_overlap = chunk_overlap
+        self._slots = FairSlots(max_parallel)
 
     @staticmethod
     def _resolve_model_path(path: str) -> str:
@@ -167,13 +183,26 @@ class HybridPIIDetector:
     # вроде LiteLLM (presidio_language: ru) присылают "ru" — без этого анализ падал с 500.
     _LANGUAGE_ALIASES = {"ru": "en"}
 
-    def analyze(self, text: str, language: str = "en") -> List[RecognizerResult]:
+    def analyze(self, text: str, language: str = "en",
+                deadline: Optional[float] = None) -> List[RecognizerResult]:
+        """deadline — момент по time.monotonic(), после которого анализ прерывается (DeadlineExceeded)."""
         language = self._LANGUAGE_ALIASES.get(language, language)
-        raw = self._analyzer.analyze(
-            text=text,
-            entities=ALL_ENTITIES,
-            language=language,
-        )
+        return analyze_in_chunks(
+            text, lambda chunk: self._analyze_chunk(chunk, language, deadline), self._deduplicate,
+            self._chunk_chars, self._chunk_overlap, deadline)
+
+    def _analyze_chunk(self, text: str, language: str, deadline: Optional[float]) -> List[RecognizerResult]:
+        timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+        if not self._slots.acquire(timeout=timeout):
+            raise DeadlineExceeded()
+        try:
+            raw = self._analyzer.analyze(
+                text=text,
+                entities=ALL_ENTITIES,
+                language=language,
+            )
+        finally:
+            self._slots.release()
         # spaCy may confuse email addresses with ADDRESS/NAME (dots, domain-like structure).
         # Drop such misclassifications before dedup so EmailRecognizer's result survives.
         raw = [r for r in raw

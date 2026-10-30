@@ -16,7 +16,7 @@ PATTERNS = {
 
 
 class FakeDetector:
-    def analyze(self, text, language="en"):
+    def analyze(self, text, language="en", deadline=None):
         return [RecognizerResult(t, m.start(), m.end(), 0.9)
                 for t, p in PATTERNS.items() for m in re.finditer(p, text)]
 
