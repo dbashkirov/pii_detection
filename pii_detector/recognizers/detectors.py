@@ -326,14 +326,21 @@ class BankCardRecognizer(PatternRecognizer):
         return out
 
 
-_CVC_CONTEXT_WORDS = {
+# Явные метки CVC — достаточно их одних.
+_CVC_LABELS = {
     # латиница
     "cvc", "cvv", "cvс", "cvc2", "cvv2", "cvv/cvc", "cvc/cvv",
     "security code", "card verification",
     # кириллица
     "цвц", "цвс", "квв", "квс", "свс", "свц",
     # явные метки
-    "код карты", "секретный код", "код безопасност",
+    "код карты", "код безопасност",
+    "код с обратной", "код на обратной", "код на оборот",
+}
+# Описания, которые встречаются и в обычном тексте («оборот компании за 2025 год», «три цифры
+# после запятой»): засчитываются, только если в том же фрагменте текста есть слово «карта».
+_CVC_HINTS = {
+    "секретный код",
     # обратная сторона карты
     "обратной сторон", "обратная сторон", "оборот", "сзади карт",
     "с обратной", "на обороте", "на обратной",
@@ -342,7 +349,10 @@ _CVC_CONTEXT_WORDS = {
     "код подтвержден", "код верификац",
     "цифры карт", "цифр карт",
 }
+_CVC_CONTEXT_WORDS = _CVC_LABELS | _CVC_HINTS
+_CARD_WORD_RE = re.compile(r"\b(?:карт(?:а|ы|е|у|ой|ою|ам|ами|ах)?|card|visa|mastercard|maestro|мир)\b")
 _CVC_WINDOW = 60
+_CVC_CARD_WINDOW = 150  # «карту» и код часто в одном предложении, но дальше 60 символов
 
 
 class CvcRecognizer(PatternRecognizer):
@@ -362,14 +372,15 @@ class CvcRecognizer(PatternRecognizer):
         text_lower = text.lower()
         for r in results:
             close = text_lower[max(0, r.start - self._CLOSE): r.end + self._CLOSE]
-            if any(w in close for w in _CVC_CONTEXT_WORDS):
+            far = text_lower[max(0, r.start - self._FAR): r.end + self._FAR]
+            card_ctx = text_lower[max(0, r.start - _CVC_CARD_WINDOW): r.end + _CVC_CARD_WINDOW]
+            words = _CVC_CONTEXT_WORDS if _CARD_WORD_RE.search(card_ctx) else _CVC_LABELS
+            if any(w in close for w in words):
                 score = 0.7
+            elif any(w in far for w in words):
+                score = 0.5
             else:
-                far = text_lower[max(0, r.start - self._FAR): r.end + self._FAR]
-                if any(w in far for w in _CVC_CONTEXT_WORDS):
-                    score = 0.5
-                else:
-                    continue
+                continue
             r.score = score
             out.append(r)
         return out

@@ -18,17 +18,30 @@ def _entropy(s: str) -> float:
 
 # ── Контекст ──────────────────────────────────────────────────────────────────
 
-_TOKEN_MARKERS = [
+# Маркеры ищутся с начала слова: «ключ» не должен находиться в «заключении» и «включить».
+_TOKEN_MARKERS_RE = re.compile(r'\b(?:' + '|'.join([
     'токен', 'ключ', 'пароль', 'секрет', 'подтвержд', 'активац', 'авторизац',
     'token', 'key', 'secret', 'api', 'bearer', 'access',
     'refresh', 'authorization', 'credentials', 'auth', 'confirm',
     'password', 'passphrase',
-]
+]) + ')')
 _STRONG_MARKERS = [
     'токен:', 'ключ:', 'token:', 'secret:', 'api_key:', 'bearer ', 'api key:', 'api token:',
 ]
-_OTP_MARKERS = ['код', 'code', 'подтвержд', 'confirm', 'активац', 'otp', 'пин', 'pin']
+
+# Одноразовый код. Слова ищутся целиком: «код» не должен находиться в «кодексе» и «кодировке»,
+# «пин» — в «пинге», «code» — в «decode». Сами по себе «код» и «code» встречаются слишком часто
+# («код ошибки 5003», «код ОКВЭД», «Python code»), поэтому нужен уточнитель рядом: «код
+# подтверждения», «код из СМС», «код доступа». Маркеров из _OTP_STRONG_RE достаточно самих по себе.
+_OTP_STRONG_RE = re.compile(
+    r'\b(?:otp|totp|2fa|pin|пин(?:-?код\w*)?|одноразов\w*|парол[ьяюеи]\w*|password|passcode)\b')
+_OTP_CODE_RE = re.compile(r'\b(?:код|кода|коду|кодом|коде|коды|кодов|code|codes)\b')
+_OTP_QUALIFIER_RE = re.compile(
+    r'подтвержд|подтверди|активац|верификац|авторизац|восстановл|\bсброс|\bвход(?:а|е|у|ом)?\b|\bдоступ|'
+    r'\bсмс\b|\bsms\b|никому|verif|confirm|one-time|\blogin\b|\bauth|\baccess\b|\bsecurity\b')
 _ANTI_OTP = ['паспорт', 'серия', 'номер карты', 'карта', 'руб', '₽', 'списали', 'платёж']
+# Год, а не код: «с 2026 года», «в 2024 г.», «2025 год»
+_YEAR_AFTER_RE = re.compile(r'\s*(?:г\.|гг?\b|год)')
 
 
 def _ctx(text: str, start: int, end: int, window: int = 60) -> str:
@@ -36,8 +49,7 @@ def _ctx(text: str, start: int, end: int, window: int = 60) -> str:
 
 
 def _has_token_ctx(text: str, start: int, end: int) -> bool:
-    c = _ctx(text, start, end)
-    return any(m in c for m in _TOKEN_MARKERS)
+    return bool(_TOKEN_MARKERS_RE.search(_ctx(text, start, end)))
 
 
 def _has_strong_ctx(text: str, start: int, end: int) -> bool:
@@ -45,9 +57,18 @@ def _has_strong_ctx(text: str, start: int, end: int) -> bool:
     return any(m in c for m in _STRONG_MARKERS)
 
 
+def _is_year(text: str, start: int, end: int) -> bool:
+    value = text[start:end]
+    return len(value) == 4 and value[:2] in ('19', '20') and bool(_YEAR_AFTER_RE.match(text, end))
+
+
 def _has_otp_ctx(text: str, start: int, end: int) -> bool:
     c = _ctx(text, start, end, window=40)
-    return any(m in c for m in _OTP_MARKERS) and not any(m in c for m in _ANTI_OTP)
+    if any(m in c for m in _ANTI_OTP) or _is_year(text, start, end):
+        return False
+    if _OTP_STRONG_RE.search(c):
+        return True
+    return bool(_OTP_CODE_RE.search(c) and _OTP_QUALIFIER_RE.search(c))
 
 
 # ── Type 1: специфические форматы ─────────────────────────────────────────────
@@ -71,6 +92,54 @@ _CAND_RE = re.compile(r'[A-Za-z0-9+/=_\-]+(?:\.[A-Za-z0-9+/=_\-]+)*')
 
 _NO_CTX = (3.5, 32)  # (min_entropy, min_len) без контекста
 _CTX = (3.3, 16)  # с контекстом
+
+# Хэши (sha256-digest образа, коммит git, md5) — высокоэнтропийные, но не секреты.
+# Пропускаем hex-строку стандартной длины с префиксом алгоритма или рядом со словами про хэш,
+# если рядом нет явного маркера секрета («token:», «api key:»…).
+_HEX_RE = re.compile(r'[0-9a-fA-F]+')
+_HASH_LENGTHS = {32, 40, 56, 64, 96, 128}
+_HASH_PREFIX_RE = re.compile(r'(?:sha(?:1|224|256|384|512)|md5)[:=@-]$', re.IGNORECASE)
+_HASH_MARKERS = ['digest', 'sha', 'commit', 'коммит', 'hash', 'хэш', 'хеш', 'checksum', 'контрольн']
+
+
+def _is_hash(text: str, start: int, end: int) -> bool:
+    candidate = text[start:end]
+    if len(candidate) not in _HASH_LENGTHS or not _HEX_RE.fullmatch(candidate):
+        return False
+    if _has_strong_ctx(text, start, end):
+        return False
+    if _HASH_PREFIX_RE.search(text[max(0, start - 8):start]):
+        return True
+    c = _ctx(text, start, end, window=40)
+    return any(m in c for m in _HASH_MARKERS)
+
+
+# Пути модулей, имена переменных и файлов из кода: openpyxl.worksheet.datavalidation,
+# calculate_total_revenue_by_region, src/components/UserProfile. По длине и энтропии они похожи
+# на ключ, но каждая часть — обычные слова (snake_case, camelCase, CONSTANT) и короткие числа.
+# В случайной строке цифры стоят внутри частей, а «слова» из букв выходят по одной-две буквы.
+_WORD_CHUNK_RE = re.compile(r'[A-Z]+(?![a-z])|[A-Z]?[a-z]+')
+
+
+def _is_identifier(candidate: str) -> bool:
+    if '=' in candidate or '+' in candidate:  # base64
+        return False
+    chunks = 0
+    for part in filter(None, re.split(r'[._/\-]', candidate)):
+        if part.isdigit():
+            if len(part) > 4:
+                return False
+            continue
+        word = part.rstrip('0123456789')
+        if not word or len(part) - len(word) > 2:
+            return False
+        found = _WORD_CHUNK_RE.findall(word)
+        if ''.join(found) != word:  # цифры в середине
+            return False
+        chunks += len(found)
+    letters = sum(ch.isalpha() for ch in candidate)
+    return chunks > 0 and letters / chunks >= 3
+
 
 # ── Type 3: OTP ───────────────────────────────────────────────────────────────
 _OTP_RE = re.compile(r'\b\d{4,8}\b')
@@ -116,7 +185,12 @@ class TokenRecognizer(EntityRecognizer):
             min_ent, min_len = _CTX if has_ctx else _NO_CTX
             if len(candidate) < min_len or _entropy(candidate) < min_ent:
                 continue
-            score = 0.90 if _has_strong_ctx(text, m.start(), m.end()) else 0.75 if has_ctx else 0.65
+            if _is_hash(text, m.start(), m.end()):
+                continue
+            strong = _has_strong_ctx(text, m.start(), m.end())
+            if not strong and _is_identifier(candidate):
+                continue
+            score = 0.90 if strong else 0.75 if has_ctx else 0.65
             seen.add(span)
             results.append(RecognizerResult("TOKEN", m.start(), m.end(), score))
 

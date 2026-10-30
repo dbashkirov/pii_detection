@@ -1,7 +1,8 @@
 import os
 import logging
+import time
 from contextlib import asynccontextmanager
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
@@ -60,6 +61,18 @@ class AnonymizeResponse(BaseModel):
 # ── Инициализация детектора ──────────────────────────────────────────────────
 
 _detector = None
+_allow_list: List[str] = []
+
+# Больше этого (суммарно по текстам запроса) не анализируем — 413 вместо долгого ожидания.
+# Память от длины не зависит (тексты режутся на куски), растёт только время.
+_MAX_TEXT_CHARS = int(os.environ.get("PII_MAX_TEXT_CHARS", "2000000"))
+
+
+def _check_size(texts: List[str]) -> None:
+    total = sum(len(t) for t in texts)
+    if total > _MAX_TEXT_CHARS:
+        raise HTTPException(413, detail=f"Текст запроса слишком длинный для проверки: {total} символов, "
+                                        f"не больше {_MAX_TEXT_CHARS}")
 
 
 @asynccontextmanager
@@ -67,9 +80,19 @@ async def lifespan(app: FastAPI):
     global _detector
     model_path = os.environ.get("PII_SPACY_MODEL_PATH", "alrosait/spacy_ru_core_news_lg_pii")
     logger.info(f"Загружаем HybridPIIDetector из {model_path} ...")
-    from pii_detector import HybridPIIDetector
-    _detector = HybridPIIDetector(spacy_model_path=model_path)
+    from pii_detector import HybridPIIDetector, config
+    _detector = HybridPIIDetector(
+        spacy_model_path=model_path,
+        chunk_chars=int(os.environ.get("PII_CHUNK_CHARS", config.CHUNK_CHARS)),
+        chunk_overlap=int(os.environ.get("PII_CHUNK_OVERLAP", config.CHUNK_OVERLAP)),
+        max_parallel=int(os.environ.get("PII_MAX_PARALLEL", config.MAX_PARALLEL)),
+    )
     logger.info("HybridPIIDetector готов ✓")
+    allow_path = os.environ.get("PII_ALLOW_LIST_FILE")
+    if allow_path:
+        with open(allow_path, encoding="utf-8") as f:
+            _allow_list.extend(line.strip() for line in f if line.strip() and not line.startswith("#"))
+        logger.info(f"Allow-list: {len(_allow_list)} терминов из {allow_path}")
     yield
     logger.info("pii-service остановлен")
 
@@ -98,6 +121,7 @@ def analyze(req: AnalyzeRequest):
     """
     if _detector is None:
         raise HTTPException(503, detail="Детектор не готов")
+    _check_size([req.text])
 
     results = _detector.analyze(req.text, language=req.language)
 
@@ -168,3 +192,62 @@ def anonymize(req: AnonymizeRequest):
     ]
 
     return AnonymizeResponse(text=engine_result.text or '', items=items)
+
+
+# ── /mask: маскирование всех текстов запроса к LLM разом ─────────────────────
+
+class MaskRequest(BaseModel):
+    texts: List[str]
+    # Действие по типу сущности: MASK | PSEUDONYMIZE | BLOCK | ALLOW (по умолчанию MASK, NAME — PSEUDONYMIZE)
+    policy: Optional[Dict[str, str]] = None
+    # Минимальный score по типу; ключ "ALL" — для остальных типов
+    score_thresholds: Optional[Dict[str, float]] = None
+    # Термины, которые не считаются ПД (дополняют PII_ALLOW_LIST_FILE)
+    allow_list: Optional[List[str]] = None
+    # Сколько секунд клиент ждёт ответа. Не успели — 504, а не работа впустую после его таймаута.
+    timeout: Optional[float] = None
+
+
+class MaskResponse(BaseModel):
+    texts: List[str]
+    restore: List[List[str]]  # пары [замена, оригинал] для обратной подстановки в ответе модели
+    entities: Dict[str, int]  # сколько найдено по типам
+    blocked: List[str]  # типы с политикой BLOCK, найденные в запросе; тогда texts и restore пустые
+
+
+@app.post("/mask", response_model=MaskResponse)
+def mask(req: MaskRequest):
+    """Маскирует тексты одного запроса со сквозными метками и псевдонимами ФИО.
+
+    Используется guardrail-ом LiteLLM (docker/litellm/pii_guardrail.py).
+    """
+    if _detector is None:
+        raise HTTPException(503, detail="Детектор не готов")
+    from pii_detector.chunking import DeadlineExceeded
+    from pii_detector.masking import ACTIONS, mask_texts
+
+    bad = {k: v for k, v in (req.policy or {}).items() if v not in ACTIONS}
+    if bad:
+        raise HTTPException(422, detail=f"Неизвестные действия {bad}, допустимые: {ACTIONS}")
+    _check_size(req.texts)
+
+    started = time.monotonic()
+    try:
+        result = mask_texts(
+            _detector,
+            req.texts,
+            policy=req.policy,
+            score_thresholds=req.score_thresholds,
+            allow_list=_allow_list + (req.allow_list or []),
+            deadline=started + req.timeout if req.timeout else None,
+        )
+    except DeadlineExceeded:
+        chars = sum(len(t) for t in req.texts)
+        logger.warning(f"/mask: не успели за {req.timeout} с ({len(req.texts)} текстов, {chars} символов)")
+        raise HTTPException(504, detail=f"Проверка не успела за {req.timeout} с")
+    return MaskResponse(
+        texts=result.texts,
+        restore=[[a, b] for a, b in result.restore],
+        entities=result.entities,
+        blocked=result.blocked,
+    )

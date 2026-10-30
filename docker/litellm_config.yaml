@@ -12,61 +12,50 @@ model_list:
 guardrails:
   - guardrail_name: "pii-filter"
     litellm_params:
-      guardrail: presidio
-      mode: "pre_call"
+      # Свой guardrail (docker/litellm/pii_guardrail.py, смонтирован рядом с конфигом) поверх
+      # /mask pii-service. Встроенный guardrail presidio LiteLLM для диалогов не подходит:
+      # метки нумеруются заново в каждом сообщении (разные люди получают одну <NAME_1>),
+      # стрим копится до конца ответа, рассуждения и tool calls не восстанавливаются.
+      # Сравнение — docs/litellm_guardrail.md.
+      guardrail: pii_guardrail.PIIGuardrail
+      mode: [pre_call, post_call]
       default_on: true
-
-      # Адреса Presidio REST API — наш pii-service реализует этот интерфейс
-      presidio_analyzer_api_base: "http://pii-service:5001"
-      presidio_anonymizer_api_base: "http://pii-service:5001"
-
-      presidio_language: "en"
-
-      # Применять только к входящим запросам (не к ответам LLM).
-      # Без этого LiteLLM создаёт дополнительный post_call callback apply_to_output,
-      # который перемаскирует ответ после deanonymization и ломает обратную подстановку.
-      presidio_filter_scope: "input"
+      pii_api_base: "http://pii-service:5001"
 
       # ── Политика фильтрации ───────────────────────────────────────────────
-      # Задаётся один раз до запуска. Допустимые значения для каждой сущности:
-      #   "MASK" — ПД заменяются на <ENTITY_TYPE> до отправки в LLM;
-      #              LLM видит <NAME_1>, пользователь получает исходное имя обратно
-      #   "BLOCK" — запрос отклоняется (HTTP 400) при обнаружении ПД.
-      #
-      #   Чтобы сменить режим: изменить значения ниже, затем
+      # Для каждой сущности:
+      #   "PSEUDONYMIZE" — только NAME: ФИО заменяется правдоподобным ФИО того же рода и в том же
+      #                    падеже («Петрову Ивану Сергеевичу» → «Тарасову Денису Андреевичу»),
+      #                    в ответе возвращается исходное ФИО в нужном падеже
+      #   "MASK"  — замена меткой <EMAIL_1>; в ответе метка заменяется исходным значением
+      #   "BLOCK" — запрос отклоняется (HTTP 400)
+      #   "ALLOW" — не трогать
+      # Не указанные типы — MASK. Сменить политику: изменить значения ниже, затем
       #   docker compose restart litellm (пересборка не нужна)
-      pii_entities_config:
-        NAME: "MASK"
+      pii_policy:
+        NAME: "PSEUDONYMIZE"
         ADDRESS: "MASK"
         EMAIL: "MASK"
         PHONE_NUMBER: "MASK"
-        BANK_CARD_NUMBER: "MASK"
-        CVC: "MASK"
-        TOKEN: "MASK"
         INN: "MASK"
         KPP: "MASK"
         OGRN: "MASK"
         OGRNIP: "MASK"
         SNILS: "MASK"
         PASSPORT_NUMBER: "MASK"
+        BANK_CARD_NUMBER: "MASK"
+        CVC: "MASK"
+        TOKEN: "MASK"
 
-#        NAME: "BLOCK"
-#        ADDRESS: "BLOCK"
-#        EMAIL: "BLOCK"
-#        PHONE_NUMBER: "BLOCK"
-#        BANK_CARD_NUMBER: "BLOCK"
-#        CVC: "BLOCK"
-#        TOKEN: "BLOCK"
-#        INN: "BLOCK"
-#        KPP: "BLOCK"
-#        OGRN: "BLOCK"
-#        OGRNIP: "BLOCK"
-#        SNILS: "BLOCK"
-#        PASSPORT_NUMBER: "BLOCK"
+      # Минимальный score по типу ("ALL" — для остальных), например NAME: 0.9
+      # pii_score_thresholds: {ALL: 0.5}
 
+      # Термины, которые не считаются ПД (названия компаний, месторождений, ...);
+      # ещё можно задать файлом: PII_ALLOW_LIST_FILE у pii-service
+      # pii_allow_list: ["Сухой Лог"]
 
-      # Обратная подстановка: LLM отвечает с <NAME_1>, пользователь видит исходное имя
-      output_parse_pii: true
+      # Добавлять в system prompt просьбу не изменять метки (true по умолчанию)
+      # pii_placeholder_hint: true
 
 litellm_settings:
   request_timeout: 60
