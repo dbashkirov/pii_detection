@@ -163,7 +163,12 @@ class HybridPIIDetector:
             filtered.append(r)
         return filtered
 
+    # Русская модель зарегистрирована в Presidio под кодом "en" (см. _build_analyzer), а клиенты
+    # вроде LiteLLM (presidio_language: ru) присылают "ru" — без этого анализ падал с 500.
+    _LANGUAGE_ALIASES = {"ru": "en"}
+
     def analyze(self, text: str, language: str = "en") -> List[RecognizerResult]:
+        language = self._LANGUAGE_ALIASES.get(language, language)
         raw = self._analyzer.analyze(
             text=text,
             entities=ALL_ENTITIES,

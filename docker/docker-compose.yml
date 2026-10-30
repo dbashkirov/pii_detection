@@ -72,9 +72,11 @@ services:
       start_period: 90s
     networks: [pii_net]
 
-  # ── LiteLLM — прокси с нативным Presidio PII-guardrail ──────────────────
+  # ── LiteLLM — прокси с PII-guardrail (litellm/pii_guardrail.py) ─────────
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    # Версия закреплена: guardrail использует хуки LiteLLM, проверен на v1.100.1 и v1.103.0
+    # (docker/e2e). Перед обновлением прогнать e2e-кейсы.
+    image: ghcr.io/berriai/litellm:v1.103.0
     container_name: pii_litellm
     restart: unless-stopped
     depends_on:
@@ -88,6 +90,8 @@ services:
       - "4000:4000"
     volumes:
       - ./litellm_config.yaml:/app/litellm_config.yaml:ro
+      # Guardrail ищется рядом с конфигом: guardrail: pii_guardrail.PIIGuardrail
+      - ./litellm/pii_guardrail.py:/app/pii_guardrail.py:ro
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - UI_USERNAME=${UI_USERNAME:-admin}

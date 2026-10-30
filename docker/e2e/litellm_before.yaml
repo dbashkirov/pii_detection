@@ -1,0 +1,43 @@
+# «Было»: встроенный guardrail presidio LiteLLM поверх /analyze и /anonymize pii-service —
+# та же схема, что в docker/litellm_config.yaml до этого изменения.
+model_list:
+  - model_name: echo
+    litellm_params: {model: openai/echo, api_base: http://mock:8000/v1, api_key: e2e}
+  - model_name: echo-reasoning
+    litellm_params: {model: openai/echo-reasoning, api_base: http://mock:8000/v1, api_key: e2e}
+  - model_name: echo-tools
+    litellm_params: {model: openai/echo-tools, api_base: http://mock:8000/v1, api_key: e2e}
+
+guardrails:
+  - guardrail_name: pii-filter
+    litellm_params:
+      guardrail: presidio
+      mode: pre_call
+      default_on: true
+      presidio_analyzer_api_base: http://pii-service:5001
+      presidio_anonymizer_api_base: http://pii-service:5001
+      presidio_language: en
+      presidio_filter_scope: input
+      output_parse_pii: true
+      pii_entities_config:
+        NAME: MASK
+        ADDRESS: MASK
+        EMAIL: MASK
+        PHONE_NUMBER: MASK
+        INN: MASK
+        KPP: MASK
+        OGRN: MASK
+        OGRNIP: MASK
+        SNILS: MASK
+        PASSPORT_NUMBER: MASK
+        BANK_CARD_NUMBER: BLOCK
+        CVC: BLOCK
+        TOKEN: BLOCK
+
+litellm_settings:
+  request_timeout: 120
+  turn_off_message_logging: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_prompts_in_spend_logs: false

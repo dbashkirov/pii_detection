@@ -1,7 +1,7 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
@@ -60,6 +60,7 @@ class AnonymizeResponse(BaseModel):
 # ── Инициализация детектора ──────────────────────────────────────────────────
 
 _detector = None
+_allow_list: List[str] = []
 
 
 @asynccontextmanager
@@ -70,6 +71,11 @@ async def lifespan(app: FastAPI):
     from pii_detector import HybridPIIDetector
     _detector = HybridPIIDetector(spacy_model_path=model_path)
     logger.info("HybridPIIDetector готов ✓")
+    allow_path = os.environ.get("PII_ALLOW_LIST_FILE")
+    if allow_path:
+        with open(allow_path, encoding="utf-8") as f:
+            _allow_list.extend(line.strip() for line in f if line.strip() and not line.startswith("#"))
+        logger.info(f"Allow-list: {len(_allow_list)} терминов из {allow_path}")
     yield
     logger.info("pii-service остановлен")
 
@@ -168,3 +174,51 @@ def anonymize(req: AnonymizeRequest):
     ]
 
     return AnonymizeResponse(text=engine_result.text or '', items=items)
+
+
+# ── /mask: маскирование всех текстов запроса к LLM разом ─────────────────────
+
+class MaskRequest(BaseModel):
+    texts: List[str]
+    # Действие по типу сущности: MASK | PSEUDONYMIZE | BLOCK | ALLOW (по умолчанию MASK, NAME — PSEUDONYMIZE)
+    policy: Optional[Dict[str, str]] = None
+    # Минимальный score по типу; ключ "ALL" — для остальных типов
+    score_thresholds: Optional[Dict[str, float]] = None
+    # Термины, которые не считаются ПД (дополняют PII_ALLOW_LIST_FILE)
+    allow_list: Optional[List[str]] = None
+
+
+class MaskResponse(BaseModel):
+    texts: List[str]
+    restore: List[List[str]]  # пары [замена, оригинал] для обратной подстановки в ответе модели
+    entities: Dict[str, int]  # сколько найдено по типам
+    blocked: List[str]  # типы с политикой BLOCK, найденные в запросе; тогда texts и restore пустые
+
+
+@app.post("/mask", response_model=MaskResponse)
+def mask(req: MaskRequest):
+    """Маскирует тексты одного запроса со сквозными метками и псевдонимами ФИО.
+
+    Используется guardrail-ом LiteLLM (docker/litellm/pii_guardrail.py).
+    """
+    if _detector is None:
+        raise HTTPException(503, detail="Детектор не готов")
+    from pii_detector.masking import ACTIONS, mask_texts
+
+    bad = {k: v for k, v in (req.policy or {}).items() if v not in ACTIONS}
+    if bad:
+        raise HTTPException(422, detail=f"Неизвестные действия {bad}, допустимые: {ACTIONS}")
+
+    result = mask_texts(
+        _detector,
+        req.texts,
+        policy=req.policy,
+        score_thresholds=req.score_thresholds,
+        allow_list=_allow_list + (req.allow_list or []),
+    )
+    return MaskResponse(
+        texts=result.texts,
+        restore=[[a, b] for a, b in result.restore],
+        entities=result.entities,
+        blocked=result.blocked,
+    )
